@@ -20,7 +20,7 @@ else:
 (PACKAGE/'发行说明.md').write_text(notes)
 files = subprocess.check_output(['git', 'ls-files'], cwd=ROOT, text=True).splitlines()
 for name in files:
-    if name.startswith(('release/GuandanSwitch-', 'release/manifest.json')) or name == 'GuandanTime.nsp':
+    if name.startswith(('release/GuandanSwitch-', 'release/manifest.json')) or name == 'GuandanTime.nsp' or (name.startswith('release/v0.4.1/') and '.part' in name):
         continue
     src = ROOT/name
     if src.is_file():
@@ -30,6 +30,8 @@ for name in files:
 font = PACKAGE/'source-project/romfs/font.otf'
 font.parent.mkdir(parents=True, exist_ok=True)
 shutil.copy2(ROOT/'romfs/font.otf', font)
+if (DIST/'BUILD-SOURCE-COMMIT.txt').exists():
+    shutil.copy2(DIST/'BUILD-SOURCE-COMMIT.txt', PACKAGE/'BUILD-SOURCE-COMMIT.txt')
 subprocess.run(['git','rev-parse','HEAD'], cwd=ROOT, check=True, stdout=(PACKAGE/'SOURCE-COMMIT.txt').open('w'))
 archive = DIST/'GuandanSwitch-v0.4.1.zip'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:

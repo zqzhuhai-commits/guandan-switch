@@ -1,21 +1,47 @@
 # 掼蛋时光 · Switch 原生单机版
 
-当前版本：**v0.4 测试版**。新版全屏界面、渐变蒙版、菜单弹窗及对局功能从当前源码重新编译，经过自动检查后由 GitHub Actions 发布。尚未进行实体 Switch 验证。
+当前版本：**v0.4.1 测试版**。新版全屏界面、渐变蒙版、菜单弹窗及对局功能从当前源码重新编译，经过自动检查后由 GitHub Actions 发布。尚未进行实体 Switch 验证。
 
-[下载 v0.4 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.0/GuandanSwitch-v0.4.zip) · [下载独立 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.0/GuandanSwitch.nro) · [SHA-256 校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.0/SHA256SUMS.txt)
+[下载 v0.4.1 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/GuandanSwitch-v0.4.1.zip) · [下载新版 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/GuandanTime.nsp) · [下载独立 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/GuandanSwitch.nro) · [SHA-256 校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/SHA256SUMS.txt)
 
-独立 NRO 内嵌字体、背景和角色，无需另拷资源。原生 NSP 仅在发布工作流配置 `NSP_KEYS` 构建输入时生成；是否附带请以 [v0.4 Release 附件](https://github.com/zqzhuhai-commits/guandan-switch/releases/tag/v0.4.0) 为准。仓库根目录 `GuandanTime.nsp` 是历史文件，**不代表本次新版**。
+本版同时提供原生单文件 NSP 和独立 NRO，字体、背景和角色全部内嵌，无需另拷资源或 NRO 转发文件。NSP 使用本版源码的原生 NSO 打包，密钥仅在本地构建时使用，不包含在仓库和发行包中。仓库根目录 `GuandanTime.nsp` 是历史文件，请下载上方 v0.4.1 Release 附件。
 
 参考腾讯《大掼蛋》的休闲棋牌氛围，独立编写规则、AI 和界面；不含腾讯的程序、美术、角色、音频或账号服务。游戏完全离线，无内购、无联网、无真钱交易。
 
 
-![大厅预览](preview/home.png)
+## 界面截图
 
-![明牌练习预览](preview/training.png)
+以下为 v0.4.1 同源 SDL2 桌面程序实际渲染的 1280×720 截图，展示全屏背景、菜单弹窗和细黑边扑克牌；不是实体 Switch 截图。点击图片可查看原图。
 
-![结算预览](preview/over.png)
+| 大厅与导航 | 标准牌桌 |
+|---|---|
+| ![大厅与导航](preview/home.png) | ![标准牌桌](preview/game.png) |
 
-![复盘报告预览](preview/review.png)
+| 明牌练习 | 开局设置 |
+|---|---|
+| ![明牌练习](preview/training.png) | ![开局设置](preview/setup.png) |
+
+| 出牌记录 | 游戏设置 |
+|---|---|
+| ![出牌记录](preview/history.png) | ![游戏设置](preview/settings.png) |
+
+| 玩法说明 | 快捷表情 |
+|---|---|
+| ![玩法说明](preview/help.png) | ![快捷表情](preview/emote.png) |
+
+| 对局结算 | 复盘报告 |
+|---|---|
+| ![对局结算](preview/over.png) | ![复盘报告](preview/review.png) |
+
+| 暂停菜单 | 本地战绩 |
+|---|---|
+| ![暂停菜单](preview/pause.png) | ![本地战绩](preview/stats.png) |
+
+## v0.4.1 更新
+
+- 所有扑克牌（包括牌背、明牌、手牌、出牌与记录中的缩略牌）统一增加 1 像素黑色圆角边框，保留选牌和焦点的外侧高亮。
+- README 增加 12 张带界面名称的截图。
+- 提供本版原生单文件 NSP，核对 NCA、CNMT、NSO、NPDM、版本信息和内嵌素材。
 
 ## v0.4 更新
 
@@ -32,17 +58,13 @@
 - 调整明牌模式布局，避免记牌器遮住对手手牌；修复头像透明与颜色通道、主题切换和记牌器大小王数量。
 - 复盘标记为牌力统计（非 AI 评估），修复坐标网格和玩家图例。
 
-![开局设置](preview/setup.png)
-
-![分页出牌记录](preview/history.png)
-
-## 安装 v0.4
+## 安装 v0.4.1
 
 1. 下载 Release 中的 `GuandanSwitch.nro`，或解压完整发行包。
 2. 将 NRO 放到 SD 卡 `switch/GuandanSwitch/GuandanSwitch.nro`。
 3. 在支持 homebrew 的 CFW 系统中，以 hbmenu 应用模式运行（避免相册小内存模式）。字体、背景和角色已全部内嵌。
 
-若 Release 附有本次编译的 `GuandanTime.nsp`，可通过兼容的 homebrew 安装器安装；该形态本体与资源全部内嵌，无需外置 NRO。未附 NSP 时，请使用本版 NRO，不要将历史 NSP 当作 v0.4 安装。
+也可下载本版 `GuandanTime.nsp`，通过兼容的 homebrew 安装器安装。该形态直接包含原生程序与全部资源，无需外置 NRO。标题 ID 为 `010000ABCD000000`，与历史版本一致；更新前建议备份 `switch/GuandanSwitch/` 中的存档。
 
 存档与设置实际保存在 SD 卡 `switch/GuandanSwitch/session.dat`、`profile.txt`。新 GD5 存档可保存出牌记录与复盘数据，兼容读取 GD3/GD4，但旧版程序不能读取 GD5。普通原厂系统无法运行本 homebrew 程序；尚未经过实体 Switch 启动、触屏、音频和休眠恢复验证。
 
@@ -125,7 +147,7 @@
 
 为兼容上传接口，完整发行包保存在 `release/*.partNN`，各片的校验值在 `release/manifest.json`。克隆后先执行 `python3 tools/restore_assets.py`，自动校验并还原完整 ZIP、内置字体和单文件 NSP；不需要联网下载字体。
 
-Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make APP_JSON= APP_VERSION=0.4.0 -j2` 生成独立 NRO。
+Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make APP_JSON= APP_VERSION=0.4.1 -j2` 生成独立 NRO。
 
 本次使用的开发环境镜像为：
 `devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d`
@@ -140,6 +162,8 @@ Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_
 
 ## 可复现发布
 
-`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后创建 v0.4.0 预发布，保留历史 Releases。
+`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.4.1/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建 v0.4.1 预发布，保留历史 Releases。
 
 如需原生 NSP：将自己用于构建的 keys 内容配置为仓库 Actions secret `NSP_KEYS`，工作流会调用锁定版本的 hacbrewpack，在内存中使用该输入，不将其写入仓库或发行包。没有该输入时仅发布可验证的独立 NRO 和源码包，不复用历史 NSP。
+
+本版 NSP 的本地打包使用调用者提供的 `prod.keys`。这是独立 homebrew，不使用商业游戏的 title keys。`release/v0.4.1/` 仅保存已打包的 NSP 分片和校验信息，不含密钥；可运行 `python3 tools/restore_native_nsp.py` 还原到 `dist/GuandanTime.nsp`。发行包中的 `BUILD-SOURCE-COMMIT.txt` 标识原生编译的源码提交，`SOURCE-COMMIT.txt` 标识包含文档和截图的打包提交。
