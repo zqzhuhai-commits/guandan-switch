@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCREENS = {'home':'--capture', 'game':'--capture-game', 'training':'--capture-training',
            'setup':'--capture-setup', 'history':'--capture-history', 'settings':'--capture-settings',
            'help':'--capture-help', 'emote':'--capture-emote',
-           'over':'--capture-over', 'review':'--capture-review'}
+           'over':'--capture-over', 'review':'--capture-review',
+           'pause':'--capture-pause', 'stats':'--capture-stats'}
 with TemporaryDirectory(prefix='guandan-preview-') as tmp:
     env = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
     for name, flag in SCREENS.items():

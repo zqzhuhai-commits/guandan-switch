@@ -42,7 +42,7 @@ static Uint32 pausedAt=0;static int pendingMode=0,historyPage=0,hintIndex=-1;
 static std::vector<Move> hintOptions;static size_t hintAction=0;static uint32_t hintSeed=0;static int hintRound=0;
 struct Area { int x,y,w,h;bool contains(int px,int py)const{return px>=x&&px<x+w&&py>=y&&py<y+h;} };
 static const Area modeAreas[4]={{460,206,350,210},{830,206,350,210},{460,436,350,118},{830,436,350,118}};
-static const Area navAreas[4]={{60,609,270,48},{346,609,270,48},{632,609,270,48},{918,609,270,48}};
+static const Area navAreas[4]={{60,600,270,70},{346,600,270,70},{632,600,270,70},{918,600,270,70}};
 void setModal(int next){Uint32 now=SDL_GetTicks();if(!modal&&next)pausedAt=now;if(modal&&!next)lastAI+=now-pausedAt;modal=next;}
 std::vector<int> selection(){std::vector<int> out;for(int id:game.hands[0])if(selected[id])out.push_back(id);return out;}
 void resetHints(){hintIndex=-1;hintOptions.clear();}
@@ -50,6 +50,9 @@ void resetHints(){hintIndex=-1;hintOptions.clear();}
 enum FxType{FX_PLAY,FX_BOMB,FX_PASS,FX_EMOTE,FX_WIN};
 struct Fx{int type;Uint32 t0;int dur;int sx,sy,dx,dy;std::vector<int> cards;std::string text;};
 static std::vector<Fx> fxList;
+static bool lightPanel=false;
+struct LightPanelScope {bool previous=lightPanel;LightPanelScope(){lightPanel=true;}~LightPanelScope(){lightPanel=previous;}};
+
 static std::array<Move,4> lastShown{};static std::array<bool,4> lastPassed{};static bool lastOver=false;
 
 void color(Col c){SDL_SetRenderDrawColor(ren,c.r,c.g,c.b,c.a);}
@@ -67,7 +70,11 @@ void roundedGradient(int x,int y,int w,int h,int r,Col a,Col b){
 }
 void boxOutline(int x,int y,int w,int h,int r,Col c){box(x,y,w,h,r,c);}
 
-void text(const std::string&s,int x,int y,int size,Col c=CREAM,bool centered=false){if(s.empty())return;std::string key=std::to_string(size)+":"+std::to_string(c.r)+","+std::to_string(c.g)+","+std::to_string(c.b)+":"+s;
+void text(const std::string&s,int x,int y,int size,Col c=CREAM,bool centered=false){if(s.empty())return;
+ if(lightPanel){auto same=[&](Col x){return c.r==x.r&&c.g==x.g&&c.b==x.b;};Uint8 alpha=c.a;
+  if(same(CREAM)||same(WHITE))c={44,57,91};else if(same(MUTED))c={101,116,147};else if(same(GOLD))c={159,108,25};else if(same(Col{207,221,204}))c={88,105,139};c.a=alpha;
+ }
+ std::string key=std::to_string(size)+":"+std::to_string(c.r)+","+std::to_string(c.g)+","+std::to_string(c.b)+":"+s;
  auto it=cache.find(key);if(it==cache.end()){if(!fonts.count(size))fonts[size]=TTF_OpenFont(fontPath.c_str(),size);if(!fonts[size])return;SDL_Color sc{c.r,c.g,c.b,255};SDL_Surface*sf=TTF_RenderUTF8_Blended(fonts[size],s.c_str(),sc);if(!sf)return;TextTex t{SDL_CreateTextureFromSurface(ren,sf),sf->w,sf->h};SDL_FreeSurface(sf);it=cache.emplace(key,t).first;}
  auto&t=it->second;SDL_SetTextureAlphaMod(t.t,c.a);SDL_Rect d{x-(centered?t.w/2:0),y,t.w,t.h};SDL_RenderCopy(ren,t.t,nullptr,&d);}
 void trimCache(){if(cache.size()>650){for(auto&kv:cache)SDL_DestroyTexture(kv.second.t);cache.clear();}}
@@ -167,39 +174,75 @@ void clearFx(Uint32 now){fxList.erase(std::remove_if(fxList.begin(),fxList.end()
 // ---------------- screens ----------------
 // The lobby is drawn natively so labels remain crisp on handheld and TV output.
 void bgHome(){
- vgrad(0,0,W,H,{39,63,125},{14,19,53});
- if(bgTex[2]){SDL_Rect d{0,92,W,720};SDL_RenderCopy(ren,bgTex[2],nullptr,&d);rect(0,92,W,H-92,{14,34,70,24});}
- else{for(int i=0;i<9;i++){int y=130+i*58;line(0,y,1280,y-180,{137,174,255,13});}for(int i=0;i<36;i++){int x=(i*167+39)%W,y=(i*79+100)%H;circle(x,y,i%5==0?2:1,{186,207,255,60});}}
- rect(0,0,W,92,{9,15,43,220});hline(60,91,1128,{156,181,255,80});
- rect(0,592,W,128,{8,15,35,190});
+ if(bgTex[2]){SDL_Rect d{0,0,W,H};SDL_RenderCopy(ren,bgTex[2],nullptr,&d);}
+ else{vgrad(0,0,W,H,{39,63,125},{14,19,53});for(int i=0;i<9;i++){int y=130+i*58;line(0,y,1280,y-180,{137,174,255,13});}}
 }
 void bgTable(){
- if(bgTex[1]&&skin==0){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);rect(0,0,W,H,{6,16,12,58});}
+ if(bgTex[1]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);}
  else vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
- for(int yy=145;yy<444;yy++){double q=(yy-294)/150.0;int half=int(485*std::sqrt(std::max(0.0,1-q*q)));hline(640-half,yy,half*2,{70,153,134,22});}
- arc(640,294,154,2,0,6.2832,{185,213,213,18});
- for(int i=0;i<24;i++){int x=(i*139+37)%W,y=(i*73+21)%H;circle(x,y,1,{210,188,130,40});}
- boxOutline(10,74,W-20,H-96,18,{0,0,0,50});
+ // Themes tint the same edge-to-edge scene instead of replacing it with flat panels.
+ if(skin==1)rect(0,0,W,H,{12,42,100,38});
+ if(skin==2)rect(0,0,W,H,{70,20,100,38});
 }
-void button(int x,int y,int w,const std::string&label,bool active=false,bool enabled=true){box(x,y,w,48,14,active?GOLD:Col{255,255,255,enabled?Uint8(18):Uint8(7)});text(label,x+w/2,y+9,20,active?INK:enabled?CREAM:MUTED,true);}
-void homeButtons(){const char* labels[]={"继续上次对局","本地战绩","偏好设置","玩法说明"};for(int i=0;i<4;i++){auto a=navAreas[i];button(a.x,a.y,a.w,i==0&&!hasSave?"暂无进行中对局":labels[i],focus==i+4,i!=0||hasSave);}text("方向键 选择   A 进入   − 规则",60,682,15,{163,183,225});text("离线单机 · 无需联网",1004,682,15,{163,183,225},false);}
+void panelFrame(int x,int y,int w,int h,bool close=true){
+ box(x+7,y+12,w,h,26,{6,18,45,85});box(x-4,y-4,w+8,h+8,28,{106,95,169});box(x-2,y-2,w+4,h+4,26,{232,200,120});
+ roundedGradient(x,y,w,h,24,{254,253,249},{231,239,255});
+ int divider=h<400?96:76;hline(x+34,y+divider,w-68,{195,205,226});box(x+44,y+divider-1,64,3,1,{224,172,62});
+ if(!close)return;
+ circle(x+w-44,y+40,22,{119,111,181});circle(x+w-44,y+40,19,{249,251,255});
+ line(x+w-51,y+33,x+w-37,y+47,{90,91,147});line(x+w-51,y+47,x+w-37,y+33,{90,91,147});text("B",x+w-90,y+28,17,MUTED);
+}
+void button(int x,int y,int w,const std::string&label,bool active=false,bool enabled=true){
+ if(lightPanel){box(x,y+4,w,48,14,active?Col{204,146,41}:Col{190,201,226});box(x-1,y-1,w+2,50,15,active?Col{227,177,67}:Col{191,204,234});roundedGradient(x,y,w,48,14,active?Col{255,227,132}:Col{255,255,255},active?Col{249,190,62}:Col{232,240,255});hline(x+18,y+3,w-36,{255,255,255,165});text(label,x+w/2,y+9,20,active?INK:enabled?CREAM:MUTED,true);return;}
+ box(x,y,w,48,14,active?GOLD:Col{255,255,255,enabled?Uint8(18):Uint8(7)});text(label,x+w/2,y+9,20,active?INK:enabled?CREAM:MUTED,true);
+}
+void choiceRow(int x,int y,int w,const std::string&label,const std::string&value,bool active){
+ box(x-2,y-2,w+4,52,14,active?Col{225,176,66}:Col{211,221,242});box(x,y,w,48,12,{255,255,255});
+ if(active){box(x+1,y+9,4,30,2,{231,180,59});}
+ text(label,x+24,y+10,20,CREAM);
+ box(x+w-254,y+5,244,38,10,active?Col{255,237,184}:Col{237,242,254});
+ if(value=="开启"||value=="关闭"){text(value,x+w-220,y+11,18,CREAM);bool on=value=="开启";box(x+w-90,y+12,60,26,13,on?Col{97,136,224}:Col{185,195,214});circle(x+w-(on?43:77),y+25,10,WHITE);}
+ else{text(value,x+w-140,y+11,18,CREAM,true);text("›",x+w-32,y+7,22,MUTED,true);}
+}
+// Outlined floating labels stay legible over the scene without header/footer panels.
+void floatingText(const std::string&label,int x,int y,int size,Col c=WHITE,bool centered=false){
+ for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++)if(dx||dy)text(label,x+dx,y+dy,size,{8,20,40,210},centered);
+ text(label,x,y,size,c,centered);
+}
+void navIcon(int type,int x,int y,Col c){
+ ring(x,y,16,3,{15,29,53,220});ring(x,y,15,1,c);
+ auto glyph=[&](int dx,int dy,Col cc){
+  if(type==0){vline(x-4+dx,y-7+dy,14,cc);line(x-4+dx,y-7+dy,x+7+dx,y+dy,cc);line(x+7+dx,y+dy,x-4+dx,y+7+dy,cc);}
+  if(type==1)for(int i=0;i<3;i++){vline(x-7+i*7+dx,y+6-(i+1)*5+dy,(i+1)*5,cc);vline(x-6+i*7+dx,y+6-(i+1)*5+dy,(i+1)*5,cc);}
+  if(type==2){ring(x+dx,y+dy,7,2,cc);for(int i=0;i<8;i++){float a=i*.785398f;line(x+dx+int(8*std::cos(a)),y+dy+int(8*std::sin(a)),x+dx+int(11*std::cos(a)),y+dy+int(11*std::sin(a)),cc);}}
+ };
+ glyph(1,1,{15,29,53,230});glyph(0,0,c);if(type==3)floatingText("?",x,y-15,21,c,true);
+}
+void homeButtons(){
+ const char*labels[]={"继续上次对局","本地战绩","偏好设置","玩法说明"};
+ for(int i=0;i<4;i++){auto a=navAreas[i];bool active=!modal&&focus==i+4,enabled=i!=0||hasSave;Col c=active?GOLD:enabled?WHITE:Col{209,218,228};
+  navIcon(i,a.x+a.w/2,a.y+15,c);floatingText(i==0&&!hasSave?"暂无进行中对局":labels[i],a.x+a.w/2,a.y+36,18,c,true);
+  if(active){hline(a.x+a.w/2-58,a.y+65,116,GOLD);hline(a.x+a.w/2-58,a.y+66,116,GOLD);}
+ }
+ floatingText("方向键 选择   A 进入   − 规则",60,682,15);floatingText("离线单机 · 无需联网",1004,682,15);
+}
 void home(){
- bgHome();circle(82,46,23,GOLD);text("掼",82,28,26,{32,43,82},true);text("掼蛋时光",120,23,31,WHITE);
- box(302,30,106,30,15,{115,150,255,30});text("离线俱乐部",355,35,15,{188,211,255},true);
- text("累计对局  "+std::to_string(total),824,34,18,CREAM);text("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,34,18,GOLD);
- box(460,114,720,66,16,{12,24,50,170});text("好牌好搭档，随时开一桌",484,127,27,WHITE);text("双副牌 · 逢人配",1088,137,15,GOLD,true);
- if(bgTex[2]){box(60,507,374,70,16,{10,22,44,195});text("好配合，就是好手气",247,517,23,WHITE,true);text("掼蛋时光 · 离线俱乐部",247,550,16,GOLD,true);}
+ bgHome();circle(82,46,23,GOLD);text("掼",82,28,26,{32,43,82},true);floatingText("掼蛋时光",120,23,31);
+ floatingText("离线俱乐部",355,35,15,WHITE,true);
+ floatingText("累计对局  "+std::to_string(total),824,34,18);floatingText("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,34,18,GOLD);
+ floatingText("好牌好搭档，随时开一桌",484,127,27);floatingText("双副牌 · 逢人配",1088,137,15,GOLD,true);
+ if(bgTex[2]){floatingText("好配合，就是好手气",247,517,23,WHITE,true);floatingText("掼蛋时光 · 离线俱乐部",247,550,16,GOLD,true);}
  else{box(60,206,374,348,24,{13,27,66,180});if(avTex[0]){SDL_Rect d{160,258,174,174};SDL_RenderCopy(ren,avTex[0],nullptr,&d);}text("好配合，就是好手气",247,450,26,WHITE,true);text("经典升级 · 默契搭档 · 从 2 打到 A",247,494,17,{171,194,235},true);}
  const char* titles[]={"快速开局","经典升级","明牌练习","定局挑战"};const char* tags[]={"QUICK PLAY","CLASSIC MATCH","OPEN HANDS","CHALLENGE"};
  const char* desc[]={"随机发牌，一局尽兴","从 2 打到 A，进贡还贡","看清四家 · 练习配合","固定发牌 · 反复推演"};
  Col tops[4]={{65,114,201,235},{101,78,173,235},{37,103,146,235},{100,67,143,235}};Col bots[4]={{32,56,124,242},{53,37,113,242},{21,53,87,242},{47,31,85,242}};
- for(int i=0;i<4;i++){auto a=modeAreas[i];bool f=focus==i;box(a.x+3,a.y+6,a.w,a.h,20,{4,9,35,90});box(a.x-2,a.y-2,a.w+4,a.h+4,22,f?GOLD:Col{146,174,249,80});
-  roundedGradient(a.x,a.y,a.w,a.h,20,tops[i],bots[i]);
+ for(int i=0;i<4;i++){auto a=modeAreas[i];bool f=modal==8?pendingMode==i:!modal&&focus==i;box(a.x+3,a.y+6,a.w,a.h,20,{4,9,35,90});box(a.x-2,a.y-2,a.w+4,a.h+4,22,f?GOLD:Col{146,174,249,80});
+  roundedGradient(a.x,a.y,a.w,a.h,20,tops[i],bots[i]);hline(a.x+22,a.y+3,a.w-44,{255,255,255,70});
   text(tags[i],a.x+24,a.y+16,13,{217,227,255});text(titles[i],a.x+24,a.y+(i<2?48:38),i<2?34:27,WHITE);text(desc[i],a.x+24,a.y+(i<2?99:80),17,{217,227,255});
   if(i<2){for(int j=0;j<3;j++)cardFace((i==0?36:40)+j,a.x+211+j*27,a.y+107-j*8,48,69,false,false);box(a.x+24,a.y+148,122,36,18,f?GOLD:Col{255,255,255,32});text(i==0?"即刻开桌  ›":"开始升级  ›",a.x+85,a.y+155,17,f?INK:WHITE,true);}
   else text("›",a.x+a.w-35,a.y+40,32,GOLD);
  }
- box(460,562,720,26,10,{8,18,37,150});text("选择玩法后，可调整 AI 难度、节奏和倒计时",478,565,15,CREAM);
+ floatingText("选择玩法后，可调整 AI 难度、节奏和倒计时",478,565,15);
 }
 void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+74,14,GOLD,true);}
 void counterPanel(){
@@ -210,11 +253,10 @@ void counterPanel(){
 }
 void table(){
  bgTable();
- rect(0,0,W,66,{0,0,0,62});
- text("掼蛋时光",26,14,24,GOLD);
- const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};text(modes[game.mode],176,21,17,CREAM);text("第 "+std::to_string(game.round)+" 局",330,21,17,MUTED);
- box(566,11,160,40,13,{255,255,255,14});text("本局打 "+rankName(game.level),646,17,26,GOLD,true);
- text("我方 "+rankName(game.levels[0])+"   :   对方 "+rankName(game.levels[1]),880,22,18,CREAM);text("+ 暂停",1174,22,15,MUTED);box(1040,14,114,34,10,{255,255,255,16});text("ZL 记录",1097,20,17,CREAM,true);
+ floatingText("掼蛋时光",26,14,24,GOLD);
+ const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};floatingText(modes[game.mode],176,21,17);floatingText("第 "+std::to_string(game.round)+" 局",330,21,17);
+ floatingText("本局打 "+rankName(game.level),646,17,26,GOLD,true);
+ floatingText("我方 "+rankName(game.levels[0])+"   :   对方 "+rankName(game.levels[1]),880,22,18);floatingText("+ 暂停",1174,22,15);floatingText("ZL 记录",1097,20,17,WHITE,true);
  counterPanel();
  Uint32 now=SDL_GetTicks();
  auto fin=[&](int p){return game.hands[p].empty();};
@@ -227,7 +269,7 @@ void table(){
  if(game.mode==2){for(int p=1;p<4;p++){int x=p==1?26:p==3?1066:365,y=p==2?88:96;for(int i=0;i<int(game.hands[p].size());i++){int cols=p==2?27:6,col=i%cols,row=i/cols;cardFace(game.hands[p][i],x+col*(p==2?20:28),y+row*50,35,49,false,false);}}}
  else for(int p:{1,3}){int x=p==1?60:1160;for(int i=0;i<5;i++){int xx=x+i*5;box(xx,206+i*3,34,52,5,{40,80,64});line(xx+8,216+i*3,xx+26,248+i*3,GOLD_BORDER);}}
  showMove(2,640,196);showMove(1,250,288);showMove(3,1030,288);showMove(0,640,330);
- if(game.mode!=2){box(377,76,132,28,14,{80,163,220,55});text("对家：小满",443,80,15,{164,218,255},true);}
+ if(game.mode!=2)floatingText("对家：小满",443,80,15,{164,218,255},true);
  if(game.table.kind==NONE)text("自 由 领 出",640,262,22,{207,221,204,150},true);
  text("掼蛋时光",640,296,26,{246,198,74,18},true);
  if(!game.over){std::string st=game.turn==0?(autoplay?"正在托管 · 自动出牌":"轮到你出牌"):playerName(game.turn)+" 正在思考";text(st,640,424,21,game.turn==0?GOLD:MUTED,true);if(game.turn!=0){for(int i=0;i<3;i++)circle(640-30+i*30,457,3,i==int(now/350)%3?GOLD:Col{70,108,99});}}
@@ -243,9 +285,9 @@ void table(){
  auto btn=[&](int bx,int by,int bw,const std::string&l,bool en,bool act){box(bx,by,bw,48,14,act?GOLD:en?Col{255,255,255,20}:Col{255,255,255,7});text(l,bx+bw/2,by+9,20,act?INK:en?CREAM:MUTED,true);};
  bool my=game.turn==0&&!game.over&&!autoplay;
  btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my&&preview.kind!=NONE,my&&preview.kind!=NONE);btn(700,630,120,"R 理牌",my,false);btn(830,630,150,autoplay?"ZR 接管":"ZR 托管",!game.over,!game.over&&autoplay);btn(990,630,120,"表情",true,false);
- text("← → 移动   A 选牌   B 清选   R 理牌",24,693,14,MUTED);text("− 规则   ZL 记录",1096,693,14,MUTED);
+ floatingText("← → 移动   A 选牌   B 清选   R 理牌",24,693,14);floatingText("− 规则   ZL 记录",1096,693,14);
  recordResult();
- if(game.over){rect(0,66,W,H-66,{2,10,16,180});box(380,150,520,340,24,PANEL);text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
+ if(game.over){LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(380,150,520,340,false);text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
   int teamUp=0;if(game.mode==1){int tf=game.finish[0]%2;int place=0;for(int i=1;i<4;i++)if(game.finish[i]%2==tf)place=i;teamUp=4-place;}
   for(int i=0;i<4;i++)text(std::to_string(i+1)+"  "+playerName(game.finish[i])+(game.finish[i]%2==0?"  ★":""),440+(i%2)*215,285+(i/2)*38,19,game.finish[i]%2==0?GOLD:MUTED);
   text(game.mode!=1?"单局结束 · 下一局重新发牌":game.champion?"成功过 A · 新赛季开启！":"获胜方升 "+std::to_string(teamUp)+" 级",640,396,18,{207,221,204},true);
@@ -254,25 +296,25 @@ void table(){
 }
 void overlay(){
  if(!modal)return;
- rect(0,0,W,H,{2,10,16,205});box(207,81,866,554,26,{145,168,229,140});box(210,84,860,548,24,PANEL);text("B 返回",1004,112,17,MUTED,true);
+ LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(210,84,860,548);
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","偏好设置","玩法说明"};for(int i=0;i<4;i++)button(340,196+i*80,600,items[i],focus==i);}
- if(modal==2){text("偏好设置",254,116,34,GOLD);std::string labels[]={"AI 策略："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"牌桌主题："+std::string(skin==0?"翡翠绿":skin==1?"深海蓝":"午夜紫"),"AI 出牌速度："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"操作音效："+std::string(sound?"开启":"关闭"),"记牌器："+std::string(recorder?"开启":"关闭"),"出牌倒计时："+std::string(timerOn?"开启":"关闭")};for(int i=0;i<6;i++)button(315,180+i*70,650,labels[i],focus==i);text("A 切换选项   B 返回",640,600,17,MUTED,true);}
+ if(modal==2){text("偏好设置",254,116,34,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","操作音效","记牌器","出牌倒计时"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"原色夜景":skin==1?"深海蓝":"午夜紫",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭"};for(int i=0;i<6;i++)choiceRow(315,180+i*70,650,labels[i],values[i],focus==i);text("A 切换选项   B 返回",640,600,17,MUTED,true);}
  if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","← → 移动光标，A 选牌，X 出牌，B 清选，Y 切换提示，R 理牌。","L 不出，ZR 托管，ZL 出牌记录，+ 暂停，− 本页。","掌机支持点按选牌和按钮；倒计时结束自动出牌。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
- if(modal==4){text("本地战绩",254,116,34,GOLD);std::string v[]={std::to_string(total),std::to_string(wins),total?std::to_string(wins*100/total)+"%":"—",std::to_string(bombs)};const char*l[]={"完成对局","我方获胜","本地胜率","打出炸弹"};for(int i=0;i<4;i++){int x=330+(i%2)*340,y=200+(i/2)*150;text(v[i],x,y,46,CREAM);text(l[i],x,y+63,20,MUTED);}text("B 返回   ·   数据仅保存在本机",640,570,17,MUTED,true);}
+ if(modal==4){text("本地战绩",254,116,34,GOLD);std::string v[]={std::to_string(total),std::to_string(wins),total?std::to_string(wins*100/total)+"%":"—",std::to_string(bombs)};const char*l[]={"完成对局","我方获胜","本地胜率","打出炸弹"};for(int i=0;i<4;i++){int x=330+(i%2)*340,y=200+(i/2)*150;box(x-28,y-12,280,126,16,{255,255,255,205});circle(x+206,y+24,17,{233,223,185});text("★",x+206,y+11,18,GOLD,true);text(v[i],x,y,46,CREAM);text(l[i],x,y+63,20,MUTED);}text("B 返回   ·   数据仅保存在本机",640,570,17,MUTED,true);}
  if(modal==5){text("出牌记录",254,116,34,GOLD);int pages=std::max(1,(int(game.history.size())+4)/5);historyPage=std::clamp(historyPage,0,pages-1);text("第 "+std::to_string(historyPage+1)+" / "+std::to_string(pages)+" 页",840,132,17,MUTED);
   if(game.history.empty())text("尚无出牌记录 · 旧版本存档从恢复后开始记录",640,300,21,CREAM,true);
-  int end=int(game.history.size())-historyPage*5,start=std::max(0,end-5);for(int i=start;i<end;i++){auto&r=game.history[i];int y=178+(i-start)*72;box(248,y,784,65,10,{255,255,255,9});text(std::to_string(i+1),263,y+20,15,MUTED);text(playerName(r.player),310,y+17,20,r.player%2==0?GOLD:CREAM);text(r.move.kind==NONE?"不出":kindName(r.move.kind),390,y+21,16,MUTED);for(int j=0;j<int(r.move.cards.size());j++)cardFace(r.move.cards[j],500+j*46,y+5,40,54,false,false);}
+  int end=int(game.history.size())-historyPage*5,start=std::max(0,end-5);for(int i=start;i<end;i++){auto&r=game.history[i];int y=178+(i-start)*72;box(248,y,784,65,10,{255,255,255,210});text(std::to_string(i+1),263,y+20,15,MUTED);text(playerName(r.player),310,y+17,20,r.player%2==0?GOLD:CREAM);text(r.move.kind==NONE?"不出":kindName(r.move.kind),390,y+21,16,MUTED);for(int j=0;j<int(r.move.cards.size());j++)cardFace(r.move.cards[j],500+j*46,y+5,40,54,false,false);}
   button(290,562,250,"← 较早记录");button(740,562,250,"较新记录 →");}
- if(modal==8){const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};text(modes[pendingMode],254,116,34,GOLD);text("开局设置",940,138,18,MUTED);std::string labels[]={"AI 难度："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"出牌节奏："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"18 秒倒计时："+std::string(timerOn?"开启":"关闭"),"开始对局  ›"};for(int i=0;i<4;i++)button(315,190+i*78,650,labels[i],focus==i);text(pendingMode==3?"同一副首局可重试，适合练习拆牌思路":"四人双副牌 · 对家组队 · 红桃级牌为逢人配",640,534,18,MUTED,true);text("↑ ↓ 选择   A 切换 / 开始   B 返回",640,574,17,MUTED,true);}
+ if(modal==8){const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};text(modes[pendingMode],254,116,34,GOLD);text("开局设置",892,128,18,MUTED);const char*labels[]={"AI 难度","出牌节奏","18 秒倒计时"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",speed==0?"舒缓":speed==1?"标准":"快速",timerOn?"开启":"关闭"};for(int i=0;i<3;i++)choiceRow(315,190+i*78,650,labels[i],values[i],focus==i);button(315,424,650,"开始对局  ›",true);text(pendingMode==3?"同一副首局可重试，适合练习拆牌思路":"四人双副牌 · 对家组队 · 红桃级牌为逢人配",640,534,18,MUTED,true);text("↑ ↓ 选择   A 切换 / 开始   B 返回",640,574,17,MUTED,true);}
  if(modal==6){text("快捷表情",254,116,34,GOLD);const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};for(int i=0;i<8;i++){int col=i%2,row=i/2;button(330+col*330,196+row*84,300,em[i],focus==i);}text("方向键选择   A 发送   B 返回",640,562,17,MUTED,true);}
  if(modal==7){text("复盘报告",254,116,34,GOLD);text("牌力统计 · 非 AI 评估",650,132,17,MUTED);int n=int(game.powerLog.size());int bombs=0,maxPow=0;for(int i=0;i<n;i++){if(game.bombLog[i])bombs++;maxPow=std::max(maxPow,game.powerLog[i]);}
-  int cx=252,cy=168,cw=776,ch=206;box(cx,cy,cw,ch,10,{0,0,0,78});text("本局共 "+std::to_string(n)+" 手 · 炸弹 "+std::to_string(bombs)+" 次 · 最大牌力 "+std::to_string(maxPow),278,180,18,GOLD);
-  const int grid[4]={100,75,50,25};for(int g=0;g<4;g++){int gy=cy+ch-26-grid[g]*(ch-70)/100;hline(cx+10,gy,cw-20,{255,255,255,26});text(std::to_string(grid[g]),cx-22,gy-7,14,MUTED);}
+  int cx=252,cy=168,cw=776,ch=206;box(cx,cy,cw,ch,10,{255,255,255,220});text("本局共 "+std::to_string(n)+" 手 · 炸弹 "+std::to_string(bombs)+" 次 · 最大牌力 "+std::to_string(maxPow),278,180,18,GOLD);
+  const int grid[4]={100,75,50,25};for(int g=0;g<4;g++){int gy=cy+ch-26-grid[g]*(ch-70)/100;hline(cx+10,gy,cw-20,{180,194,221,130});text(std::to_string(grid[g]),cx-22,gy-7,14,MUTED);}
   int px0=cx+16,py0=cy+ch-26,px1=cx+cw-16,py1=cy+44;
-  if(n>1){int lx=px0,ly=py0-(maxPow?int(double(game.powerLog[0])*100/maxPow):0)*(py0-py1)/100;for(int i=0;i<n;i++){int x=px0+(px1-px0)*i/(n-1);int sc=maxPow?std::min(100,int(double(game.powerLog[i])*100.0/double(maxPow))):0;int y=py0-sc*(py0-py1)/100;line(lx,ly,x,y,GOLD);circle(x,y,2,GOLD);lx=x;ly=y;}}
+  if(n>1){int lx=px0,ly=py0-(maxPow?int(double(game.powerLog[0])*100/maxPow):0)*(py0-py1)/100;for(int i=0;i<n;i++){int x=px0+(px1-px0)*i/(n-1);int sc=maxPow?std::min(100,int(double(game.powerLog[i])*100.0/double(maxPow))):0;int y=py0-sc*(py0-py1)/100;line(lx,ly,x,y,{180,120,24});circle(x,y,2,{180,120,24});lx=x;ly=y;}}
   text("牌力曲线 · 第 1 → 第 "+std::to_string(std::max(1,n))+" 手",px0,py0+8,14,MUTED);
-  int qx=cx,qy=py0+38,qw=cw,qh=H-qy-170;box(qx,qy,qw,qh,10,{0,0,0,78});text("局势图 · 四家手牌余量",278,qy+8,18,GOLD);
-  if(!game.snapshots.empty()){Col cols[4]={GOLD,Col{120,200,160},{150,120,220},{190,150,120}};const char*ps[4]={"你","南风","小满","青竹"};for(int p=0;p<4;p++){int lx=qx+16,ly=qy+qh-18-int(game.snapshots[0][p])*(qh-52)/27;for(int i=1;i<int(game.snapshots.size());i++){int x=qx+16+(qw-112)*i/(int(game.snapshots.size())-1);int y=qy+qh-18-int(game.snapshots[i][p])*(qh-52)/27;line(lx,ly,x,y,cols[p]);lx=x;ly=y;}text(ps[p],qx+qw-40,qy+44+23*p,14,cols[p]);}}
+  int qx=cx,qy=py0+38,qw=cw,qh=H-qy-170;box(qx,qy,qw,qh,10,{255,255,255,220});text("局势图 · 四家手牌余量",278,qy+8,18,GOLD);
+  if(!game.snapshots.empty()){Col cols[4]={Col{180,120,24},Col{36,142,116},{127,86,187},{188,100,68}};const char*ps[4]={"你","南风","小满","青竹"};for(int p=0;p<4;p++){int lx=qx+16,ly=qy+qh-18-int(game.snapshots[0][p])*(qh-52)/27;for(int i=1;i<int(game.snapshots.size());i++){int x=qx+16+(qw-112)*i/(int(game.snapshots.size())-1);int y=qy+qh-18-int(game.snapshots[i][p])*(qh-52)/27;line(lx,ly,x,y,cols[p]);lx=x;ly=y;}text(ps[p],qx+qw-40,qy+44+23*p,14,cols[p]);}}
   text("B 返回",940,568,17,MUTED);}
 }
 // ---------------- actions ----------------
@@ -306,7 +348,7 @@ void act(Action a){
 }
 void click(int x,int y){
  if(modal){
-  if(Area{945,99,100,48}.contains(x,y)){act(BACK);return;}
+  if(Area{945,96,112,54}.contains(x,y)){act(BACK);return;}
   if(modal==5){if(Area{290,562,250,48}.contains(x,y))act(LEFT);else if(Area{740,562,250,48}.contains(x,y))act(RIGHT);return;}
   int count=modal==1?4:modal==2?6:modal==8?4:modal==6?8:0;
   for(int i=0;i<count;i++){
@@ -322,7 +364,7 @@ void click(int x,int y){
  if(game.turn==0&&!autoplay){int n=game.hands[0].size(),step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);if(x>=xx+i*step&&x<xx+i*step+66&&y>=yy&&y<yy+104){cursor=i;act(CONFIRM);return;}}}
 }
 int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
- for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
+ for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
  romfsInit();base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
 #else
