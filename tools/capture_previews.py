@@ -18,5 +18,10 @@ with TemporaryDirectory(prefix='guandan-preview-') as tmp:
                        cwd=ROOT, env=env, check=True, timeout=30)
         with Image.open(raw) as im:
             assert im.size == (1280, 720)
-            im.save(ROOT/'preview'/(name+'.png'))
+            output = ROOT/'preview'/(name+'.png')
+            pending = output.with_suffix('.png.tmp')
+            im.save(pending, format='PNG')
+        with Image.open(pending) as check:
+            check.verify()
+        pending.replace(output)
         print('Captured:', name)

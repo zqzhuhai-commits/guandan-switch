@@ -28,10 +28,10 @@ static std::map<int,TTF_Font*>fonts;
 struct TextTex{SDL_Texture*t;int w,h;};static std::map<std::string,TextTex>cache;
 struct Col{Uint8 r,g,b,a=255;};
 const Col INK{38,40,34},CREAM{255,248,228},GOLD{246,198,74},GOLD_D{198,150,40},
-  MUTED{158,190,176},WHITE{255,255,250},RED{212,64,64},DARK{10,36,26},
-  PANEL{20,54,42,244},PANEL2{14,38,31,246},GOLD_BORDER{246,198,74,120};
+  MUTED{158,190,176},WHITE{255,255,250},RED{212,64,64},DARK{8,12,16},
+  PANEL{12,16,20,240},PANEL2{8,12,16,244},GOLD_BORDER{246,198,74,120};
 struct Skin{Col top,bot,card,btnHover;};
-static Skin skins[3]={ {{12,82,52},{3,32,20},{240,236,222},{34,98,66}},   // 翡翠绿
+static Skin skins[3]={ {{12,82,52},{3,32,20},{240,236,222},{26,30,36,235}},   // 翡翠绿
                       {{16,48,92},{6,18,46},{238,240,246},{34,76,124}}, // 深海蓝
                       {{58,34,88},{24,14,42},{246,240,250},{84,54,118}}}; // 午夜紫
 static std::string base="./",fontPath;static int skin=0,speed=1;static bool sound=true,quit=false,autoplay=false,recorder=true,timerOn=true;
@@ -238,7 +238,7 @@ void table(){
  btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my&&preview.kind!=NONE,my&&preview.kind!=NONE);btn(700,630,120,"R 理牌",my,false);btn(830,630,150,autoplay?"ZR 接管":"ZR 托管",!game.over,!game.over&&autoplay);btn(990,630,120,"表情",true,false);
  text("← → 移动   A 选牌   B 清选   R 理牌",24,693,14,MUTED);text("− 规则   ZL 记录",1096,693,14,MUTED);
  recordResult();
- if(game.over){rect(0,66,W,H-66,{2,10,16,180});box(380,150,520,340,24,{25,35,75});text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
+ if(game.over){rect(0,66,W,H-66,{2,10,16,180});box(380,150,520,340,24,PANEL);text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
   int teamUp=0;if(game.mode==1){int tf=game.finish[0]%2;int place=0;for(int i=1;i<4;i++)if(game.finish[i]%2==tf)place=i;teamUp=4-place;}
   for(int i=0;i<4;i++)text(std::to_string(i+1)+"  "+playerName(game.finish[i])+(game.finish[i]%2==0?"  ★":""),440+(i%2)*215,285+(i/2)*38,19,game.finish[i]%2==0?GOLD:MUTED);
   text(game.mode!=1?"单局结束 · 下一局重新发牌":game.champion?"成功过 A · 新赛季开启！":"获胜方升 "+std::to_string(teamUp)+" 级",640,396,18,{207,221,204},true);
@@ -247,7 +247,7 @@ void table(){
 }
 void overlay(){
  if(!modal)return;
- rect(0,0,W,H,{2,10,16,205});box(207,81,866,554,26,{145,168,229,140});box(210,84,860,548,24,{25,35,75});text("B 返回",1004,112,17,MUTED,true);
+ rect(0,0,W,H,{2,10,16,205});box(207,81,866,554,26,{145,168,229,140});box(210,84,860,548,24,PANEL);text("B 返回",1004,112,17,MUTED,true);
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","偏好设置","玩法说明"};for(int i=0;i<4;i++)button(340,196+i*80,600,items[i],focus==i);}
  if(modal==2){text("偏好设置",254,116,34,GOLD);std::string labels[]={"AI 策略："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"牌桌主题："+std::string(skin==0?"翡翠绿":skin==1?"深海蓝":"午夜紫"),"AI 出牌速度："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"操作音效："+std::string(sound?"开启":"关闭"),"记牌器："+std::string(recorder?"开启":"关闭"),"出牌倒计时："+std::string(timerOn?"开启":"关闭")};for(int i=0;i<6;i++)button(315,180+i*70,650,labels[i],focus==i);text("A 切换选项   B 返回",640,600,17,MUTED,true);}
  if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","← → 移动光标，A 选牌，X 出牌，B 清选，Y 切换提示，R 理牌。","L 不出，ZR 托管，ZL 出牌记录，+ 暂停，− 本页。","掌机支持点按选牌和按钮；倒计时结束自动出牌。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
