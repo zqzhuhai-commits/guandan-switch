@@ -1,36 +1,87 @@
-name: Verify and publish Switch v0.1
+name: Build and release Switch v0.4
 on:
   push:
-    branches: [main]
-    paths:
-      - 'release/**'
-      - 'tools/restore_assets.py'
-      - '.github/workflows/publish.yml'
+    branches: [main, 'codex/lounge-and-table-upgrade']
+    paths: ['source/**', 'romfs/**', 'tools/**', 'Makefile', 'release/notes-v0.4.md', '.github/workflows/publish.yml']
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Restore and checksum the exact tested assets
+      - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev pkg-config python3-pil
+      - run: python3 tools/restore_assets.py
+      - run: make -f Makefile.desktop test guandan-desktop test-ui
+      - run: python3 tools/capture_previews.py
+  switch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore verified font
         run: python3 tools/restore_assets.py
-      - name: Run rules and 256 automatic deals
+      - name: Compile current source with devkitPro
         run: |
-          g++ -std=c++17 -O2 -Wall -Wextra tests/rules.cpp -o /tmp/guandan-rules
-          /tmp/guandan-rules
-      - name: Verify NRO checksum
+          mkdir -p dist/native
+          docker run --rm -v "$PWD:/project" -w /project devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d bash -lc '
+            export DEVKITPRO=/opt/devkitpro DEVKITA64=/opt/devkitpro/devkitA64
+            export PATH=/opt/devkitpro/portlibs/switch/bin:/opt/devkitpro/tools/bin:/opt/devkitpro/devkitA64/bin:$PATH
+            make APP_JSON= APP_VERSION=0.4.0 -j2
+            cp GuandanSwitch.nro dist/GuandanSwitch.nro
+            elf2nso GuandanSwitch.elf dist/native/main
+            npdmtool config.json dist/native/main.npdm
+            nacptool --create "掼蛋时光" "Independent Homebrew" "0.4.0" dist/native/control.nacp --titleid=010000abcd000000
+          '
+          python3 tools/verify_nro.py dist/GuandanSwitch.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch-native-build
+          path: dist/
+  package:
+    needs: [verify, switch]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: switch-native-build
+          path: dist/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 tools/restore_assets.py
+      - name: Optional native single-file NSP
+        env:
+          NSP_KEYS: ${{ secrets.NSP_KEYS }}
         run: |
-          echo 'aa6a2cd6588f3bab1f0e49ef6047cd297e6c09831c85dae228d9ff4c3d43483c  switch/GuandanSwitch/GuandanSwitch.nro' | sha256sum -c -
-      - name: Publish tested v0.1 binaries
+          if [ -n "$NSP_KEYS" ]; then
+            npm ci --prefix tools/packaging
+            node tools/packaging/build_nsp.mjs
+          else
+            echo 'NSP_KEYS is not configured; publishing the verified standalone NRO, not an old NSP.'
+          fi
+      - run: python3 tools/package_release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GuandanSwitch-v0.4
+          path: |
+            dist/GuandanSwitch-v0.4.zip
+            dist/GuandanSwitch.nro
+            dist/GuandanTime.nsp
+            dist/SHA256SUMS.txt
+      - name: Publish new release without replacing old releases
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cp switch/GuandanSwitch/GuandanSwitch.nro dist/GuandanSwitch.nro
-          if gh release view v0.1.0 >/dev/null 2>&1; then
-            echo 'Release v0.1.0 already exists; leaving existing assets intact.'
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            echo 'v0.4.0 already exists; no existing release assets will be replaced.'
           else
-            gh release create v0.1.0 dist/GuandanSwitch-v0.1.zip dist/GuandanSwitch.nro --target "$GITHUB_SHA" --title '掼蛋时光 Switch v0.1 测试版' --notes-file release/notes.md --prerelease
+            files=(dist/GuandanSwitch-v0.4.zip dist/GuandanSwitch.nro dist/SHA256SUMS.txt)
+            if [ -f dist/GuandanTime.nsp ]; then files+=(dist/GuandanTime.nsp); fi
+            gh release create v0.4.0 "${files[@]}" --target "$GITHUB_SHA" --title '掼蛋时光 v0.4 · 全屏界面与交互升级测试版' --notes-file dist/RELEASE-NOTES.md --prerelease
           fi

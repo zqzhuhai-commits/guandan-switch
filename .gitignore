@@ -13,3 +13,13 @@
 /romfs/*.gz
 /switch/GuandanSwitch/*.nro
 /switch/GuandanSwitch/*.gz
+
+/release/*.zip
+/ui-test
+
+/tools/packaging/node_modules/
+/tools/__pycache__/
+/preview/*.tmp
+/GuandanSwitch.nsp
+/GuandanSwitch.nso
+/GuandanSwitch.npdm
