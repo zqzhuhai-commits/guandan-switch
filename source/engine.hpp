@@ -59,6 +59,7 @@ inline Move identify(const std::vector<int>&cards,int level,const Move&target=Mo
 struct Game{
  std::array<std::vector<int>,4> hands;std::array<int,2> levels{2,2};int level=2,turn=0,last=-1,passes=0,mode=0,difficulty=1,round=0,first=0;bool over=false,champion=false;
  Move table;std::vector<int>finish,previous;std::vector<std::string>log;std::array<Move,4> shown;std::array<bool,4>passed{};std::string notice;uint32_t seed=0;
+ std::vector<int>powerLog;std::vector<bool>bombLog;std::vector<std::array<int,4>>snapshots; // 复盘：每手牌力/是否炸弹/四家手牌快照
  std::array<int,18> used{}; // cards already played this deal, by rank
  int remaining(int r)const{int own=0;for(int id:hands[0])if(Card{id}.rank()==r)own++;int n=TOTAL_RANK[r]-used[r]-own;return n<0?0:n;}
  void note(const std::string&s){notice=s;log.push_back(s);if(log.size()>80)log.erase(log.begin());}
@@ -72,7 +73,7 @@ struct Game{
   if(ret<0)for(int id:t)if(!wild(id,level)&&(ret<0||power(Card{id}.rank(),level)<power(Card{ret}.rank(),level)))ret=id;
   if(ret<0){ret=t.front();}t.erase(std::find(t.begin(),t.end(),ret));t.push_back(best);h.push_back(ret);
  }
- void deal(){round++;table=Move{};used={};finish.clear();shown={};passed={};last=-1;passes=0;over=false;for(auto&h:hands)h.clear();
+ void deal(){round++;table=Move{};used={};finish.clear();shown={};passed={};last=-1;passes=0;over=false;powerLog.clear();bombLog.clear();snapshots.clear();for(auto&h:hands)h.clear();
   std::vector<int>deck(108);for(int i=0;i<108;i++)deck[i]=i;std::mt19937 rng(seed+uint32_t(round)*7919u);std::shuffle(deck.begin(),deck.end(),rng);for(int i=0;i<108;i++)hands[i%4].push_back(deck[i]);
   turn=first;notice="新牌局开始";
   if(mode==1&&previous.size()==4){
@@ -94,6 +95,7 @@ struct Game{
   if(over||p!=turn){return false;}std::set<int> unique(cards.begin(),cards.end());if(unique.size()!=cards.size())return false;for(int id:cards)if(std::find(hands[p].begin(),hands[p].end(),id)==hands[p].end())return false;
   Move m=identify(cards,level,table);if(m.kind==NONE)return false;
   for(int id:cards){auto&h=hands[p];h.erase(std::find(h.begin(),h.end(),id));}for(int id:m.cards)used[Card{id}.rank()]++;table=m;shown[p]=m;passed[p]=false;last=p;passes=0;note(std::string(p==0?"你":p==2?"队友":"对手")+"打出"+kindName(m.kind));
+  powerLog.push_back(bombPower(m));bombLog.push_back(m.explosive());std::array<int,4>sc{};for(int i=0;i<4;i++)sc[i]=int(hands[i].size());snapshots.push_back(sc);
   if(hands[p].empty()){finish.push_back(p);if(finish.size()==3||(finish.size()==2&&finish[0]%2==finish[1]%2)){complete();return true;}}
   turn=next(p);return true;
  }

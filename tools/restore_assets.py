@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore the exact tested release, font and NRO from verified repository parts."""
+"""Restore the exact tested release, font and single-file NSP from verified repository parts."""
 import hashlib
 import json
 from pathlib import Path
@@ -25,16 +25,16 @@ try:
         if z.testzip() is not None:
             raise ValueError('Invalid ZIP contents')
         for source, dest in [
-            ('GuandanSwitch-v0.1/source-project/romfs/font.otf', 'romfs/font.otf'),
-            ('GuandanSwitch-v0.1/switch/GuandanSwitch/GuandanSwitch.nro', 'switch/GuandanSwitch/GuandanSwitch.nro'),
+            ('GuandanSwitch-v0.3/source-project/romfs/font.otf', 'romfs/font.otf'),
+            ('GuandanSwitch-v0.3/GuandanTime.nsp', 'GuandanTime.nsp'),
         ]:
             output = ROOT / dest
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(z.read(source))
             print('Restored:', dest)
-    nro = (ROOT / 'switch/GuandanSwitch/GuandanSwitch.nro').read_bytes()
-    if nro[16:20] != b'NRO0':
-        raise ValueError('Invalid NRO header')
+    nsp = (ROOT / 'GuandanTime.nsp').read_bytes()
+    if nsp[:4] != b'PFS0':
+        raise ValueError('Invalid NSP (PFS0) header')
     print('Release ZIP SHA256:', manifest['sha256'])
 except Exception:
     tmp.unlink(missing_ok=True)

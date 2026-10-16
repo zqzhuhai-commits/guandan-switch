@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 #include <sys/stat.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #ifdef __SWITCH__
 #include <switch.h>
 #endif
@@ -21,6 +23,7 @@ using namespace gd;
 
 static constexpr int W=1280,H=720;
 static SDL_Renderer*ren=nullptr;static SDL_Window*window=nullptr;
+static SDL_Texture*avTex[4]={nullptr,nullptr,nullptr,nullptr};
 static std::map<int,TTF_Font*>fonts;
 struct TextTex{SDL_Texture*t;int w,h;};static std::map<std::string,TextTex>cache;
 struct Col{Uint8 r,g,b,a=255;};
@@ -80,6 +83,17 @@ void cardFace(int id,int x,int y,int w,int h,bool sel,bool focused,bool up=true)
  if(wild(id,game.level)){box(x+w-21,y+4,17,21,4,GOLD);text("配",x+w-19,y+5,11,INK);}
 }
 // ---------------- avatars ----------------
+void loadAvatars(){
+ const char* names[]={"avatar0.png","avatar1.png","avatar2.png","avatar3.png"};
+ for(int i=0;i<4;i++){
+  std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
+  int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
+  if(!px){fprintf(stderr,"Avatar %s failed: %s\n",names[i],stbi_failure_reason());continue;}
+  SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA8888);
+  if(sf){avTex[i]=SDL_CreateTextureFromSurface(ren,sf);SDL_SetTextureBlendMode(avTex[i],SDL_BLENDMODE_BLEND);SDL_FreeSurface(sf);}
+  stbi_image_free(px);
+ }
+}
 void face(int x,int y,int r,int who){
  Col skinC=who==1?Col{242,208,172}:who==3?Col{214,172,134}:Col{236,198,160};
  circle(x,y,r,skinC);
@@ -99,7 +113,8 @@ void face(int x,int y,int r,int who){
 void drawAvatar(int p,int x,int y,int r,bool active,bool passed,bool finished){
  Uint32 now=SDL_GetTicks();float pulse=active?1.0f+0.06f*std::sin(now/80.0f):1.0f;
  if(active||finished)ring(x,y,int(r+7*pulse),4,finished?GOLD:GOLD);
- face(x,y,int(r*pulse),p);
+ if(avTex[p]){SDL_Rect dst{x-r,y-r,2*r,2*r};SDL_RenderCopy(ren,avTex[p],nullptr,&dst);}
+ else face(x,y,int(r*pulse),p);
  if(passed){circle(x,y,int(r*0.92),{10,30,24,150});text("过",x,y-9,22,MUTED,true);}
  if(finished){for(int i=-2;i<=2;i++){rect(x+i*8-5,y-r-10,10,7,{255,255,255});line(x+i*8,y-r-10,x+i*8-5,y-r-17,GOLD);line(x+i*8,y-r-10,x+i*8+5,y-r-17,GOLD);}text("已出完",x,y+r+16,15,CREAM,true);}
  else text(playerName(p),x,y+r+12,17,CREAM,true);
@@ -121,7 +136,7 @@ void clearFx(Uint32 now){fxList.erase(std::remove_if(fxList.begin(),fxList.end()
 void bgHome(){
  vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
  for(int i=0;i<30;i++){int x=(i*137+37)%W,y=(i*73+21)%H;circle(x,y,1+((i*7)%2),{210,188,130,50});}
- int mx=1130,my=180;face(mx,my,64,2);
+ int mx=1130,my=180;if(avTex[2]){SDL_Rect dst{mx-64,my-64,128,128};SDL_RenderCopy(ren,avTex[2],nullptr,&dst);}else face(mx,my,64,2);
  for(int i=0;i<3;i++)cardFace((i*2+10)*4+i,mx-30+i*20,my+70,40,58,false,false);
  for(int i=0;i<6;i++){int x=940+i*42;line(x,52,x+150,398,{123,157,136,20});}
  text("GUANDAN  /  OFFLINE CLUB",66,44,16,GOLD);
@@ -188,7 +203,7 @@ void table(){
   int teamUp=0;if(game.mode==1){int tf=game.finish[0]%2;int place=0;for(int i=1;i<4;i++)if(game.finish[i]%2==tf)place=i;teamUp=4-place;}
   for(int i=0;i<4;i++)text(std::to_string(i+1)+"  "+playerName(game.finish[i])+(game.finish[i]%2==0?"  ★":""),440+(i%2)*215,285+(i/2)*38,19,game.finish[i]%2==0?GOLD:MUTED);
   text(game.champion?"成功过 A · 新赛季开启！":"本局升 "+std::to_string(teamUp)+" 级",640,396,18,{207,221,204},true);
-  text(game.champion?"A 开始新赛季    B 返回大厅":"A 下一局    B 返回大厅",640,440,21,CREAM,true);}
+  text(game.champion?"A 开始新赛季    B 返回大厅    ZL 复盘":"A 下一局    B 返回大厅    ZL 复盘",640,440,21,CREAM,true);}
  if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
 }
 void overlay(){
@@ -199,6 +214,15 @@ void overlay(){
  if(modal==4){text("本地战绩",254,116,34,GOLD);std::string v[]={std::to_string(total),std::to_string(wins),total?std::to_string(wins*100/total)+"%":"—",std::to_string(bombs)};const char*l[]={"完成对局","我方获胜","本地胜率","打出炸弹"};for(int i=0;i<4;i++){int x=330+(i%2)*340,y=200+(i/2)*150;text(v[i],x,y,46,CREAM);text(l[i],x,y+63,20,MUTED);}text("B 返回   ·   数据仅保存在本机",640,570,17,MUTED,true);}
  if(modal==5){text("出牌记录",254,116,34,GOLD);int start=std::max(0,int(game.log.size())-10);for(int i=start;i<int(game.log.size());i++)text(game.log[i],254,180+(i-start)*36,19,i==int(game.log.size())-1?GOLD:CREAM);text("B 返回",940,568,17,MUTED);}
  if(modal==6){text("快捷表情",254,116,34,GOLD);const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};for(int i=0;i<8;i++){int col=i%2,row=i/2;button(330+col*330,196+row*84,300,em[i],focus==i);}text("方向键选择   A 发送   B 返回",640,562,17,MUTED,true);}
+ if(modal==7){text("复盘报告",254,116,34,GOLD);int n=int(game.powerLog.size());int bombs=0,maxPow=0;for(int i=0;i<n;i++){if(game.bombLog[i])bombs++;maxPow=std::max(maxPow,game.powerLog[i]);}
+  int cx=252,cy=168,cw=776,ch=206;box(cx,cy,cw,ch,10,{0,0,0,78});text("本局共 "+std::to_string(n)+" 手 · 炸弹 "+std::to_string(bombs)+" 次 · 最大牌力 "+std::to_string(maxPow),278,180,18,GOLD);
+  const int grid[4]={100,75,50,25};for(int g=0;g<4;g++){int gy=cy+ch-26-(100-grid[g])*(ch-70)/100;hline(cx+10,gy,cx+cw-20,{255,255,255,26});text(std::to_string(grid[g]),cx-22,gy-7,14,MUTED);}
+  int px0=cx+16,py0=cy+ch-26,px1=cx+cw-16,py1=cy+26;
+  if(n>1){int lx=px0,ly=py0;for(int i=0;i<n;i++){int x=px0+(px1-px0)*i/(n-1);int sc=maxPow?std::min(100,int(double(game.powerLog[i])*100.0/double(maxPow))):0;int y=py0-sc*(py0-py1)/100;line(lx,ly,x,y,GOLD);circle(x,y,2,GOLD);lx=x;ly=y;}}
+  text("评分曲线 · 第 1 → 第 "+std::to_string(std::max(1,n))+" 手",px0,py0+8,14,MUTED);
+  int qx=cx,qy=py0+38,qw=cw,qh=H-qy-170;box(qx,qy,qw,qh,10,{0,0,0,78});text("局势图 · 四家手牌余量",278,qy+8,18,GOLD);
+  if(!game.snapshots.empty()){Col cols[4]={GOLD,Col{120,200,160},{150,120,220},{190,150,120}};const char*ps[4]={"你","队友","南风","青竹"};for(int p=0;p<4;p++){int lx=qx+16,ly=qy+qh-18-int(game.snapshots[0][p])*(qh-52)/27;for(int i=1;i<int(game.snapshots.size());i++){int x=qx+16+(qw-32)*i/(int(game.snapshots.size())-1);int y=qy+qh-18-int(game.snapshots[i][p])*(qh-52)/27;line(lx,ly,x,y,cols[p]);lx=x;ly=y;}text(ps[p],qx+qw-40,qy+qh-14-32*p,14,cols[p]);}}
+  text("B 返回",940,568,17,MUTED);}
 }
 // ---------------- actions ----------------
 void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();cursor=std::min(cursor,int(game.hands[0].size())-1);lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
@@ -220,7 +244,7 @@ void act(Action a){
  }
  if(!screen){if(a==LEFT)focus=focus<4?(focus^1):4+(focus-4+3)%4;if(a==RIGHT)focus=focus<4?(focus^1):4+(focus-4+1)%4;if(a==UP)focus=focus<2?4+focus:focus<4?focus-2:2+(focus-4)/2;if(a==DOWN)focus=focus<2?focus+2:focus<4?4+(focus-2)*2:(focus-4)/2;if(a==PAUSE){quit=true;return;}if(a==HELP){modal=3;focus=0;return;}
   if(a==CONFIRM){sfx(0);if(focus<4)start(focus);else if(focus==4){if(hasSave){Game g;if(g.load(base+"session.dat")){game=g;screen=1;autoplay=false;clearSelection();cursor=0;lastAI=SDL_GetTicks();statRound=game.over?game.round:-1;fxList.clear();lastShown={};lastPassed={};}else message("存档无法读取");}}else{modal=focus==5?4:focus==6?2:3;focus=0;}}return;}
- if(a==PAUSE){checkpoint();modal=1;focus=0;sfx(0);return;}if(a==HELP){modal=3;focus=0;return;}if(a==HISTORY){modal=5;focus=0;return;}if(a==EMOTE){if(game.over)return;modal=6;focus=0;return;}
+ if(a==PAUSE){checkpoint();modal=1;focus=0;sfx(0);return;}if(a==HELP){modal=3;focus=0;return;}if(a==HISTORY){modal=game.over?7:5;focus=0;return;}if(a==EMOTE){if(game.over)return;modal=6;focus=0;return;}
  if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();statRound=-1;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
  if(a==AUTO){autoplay=!autoplay;clearSelection();message(autoplay?"托管已开启，按 ZR 取消":"已取消托管");sfx(0);lastAI=SDL_GetTicks();return;}
  if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();clearSelection();cursor=0;message("已按点数理牌，级牌和王牌在右侧");sfx(0);}
@@ -232,8 +256,8 @@ void click(int x,int y){if(modal){if(modal==1&&x>340&&x<940&&y>=196&&y<516){focu
  for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){act(acts[i]);return;}
  if(game.turn==0&&!autoplay){int n=game.hands[0].size(),step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);if(x>=xx+i*step&&x<xx+i*step+66&&y>=yy&&y<yy+104){cursor=i;act(CONFIRM);return;}}}
 }
-int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
- for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;}
+int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
+ for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;}
 #ifdef __SWITCH__
  romfsInit();base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
 #else
@@ -244,10 +268,10 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);if(!ren)ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
  SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
  fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20]){fprintf(stderr,"Font: %s\n",TTF_GetError());return 1;}
+ loadAvatars();
  SDL_AudioSpec spec{};spec.freq=48000;spec.format=AUDIO_S16SYS;spec.channels=1;spec.samples=1024;audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,nullptr,0);if(audioDevice)SDL_PauseAudioDevice(audioDevice,0);
  std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}
- if(captureGame||smoke){start(smoke?2:captureMode);if(captureOver)autoplay=true;}if(captureModal)modal=captureModal;Uint32 frame=0;
- while(!quit){
+ if(captureGame||smoke){start(smoke?2:captureMode);if(captureOver)autoplay=true;}if(captureModal)modal=captureModal;Uint32 frame=0; while(!quit){
 #ifdef __SWITCH__
  if(!appletMainLoop()){break;}padUpdate(&pad);u64 down=padGetButtonsDown(&pad);u64 held=padGetButtons(&pad);static Uint32 repeat=0;u64 dirs=HidNpadButton_Left|HidNpadButton_Right|HidNpadButton_Up|HidNpadButton_Down;if(down&HidNpadButton_StickLLeft)down|=HidNpadButton_Left;if(down&HidNpadButton_StickLRight)down|=HidNpadButton_Right;if(down&HidNpadButton_StickLUp)down|=HidNpadButton_Up;if(down&HidNpadButton_StickLDown)down|=HidNpadButton_Down;if(held&HidNpadButton_StickLLeft)held|=HidNpadButton_Left;if(held&HidNpadButton_StickLRight)held|=HidNpadButton_Right;if(held&HidNpadButton_StickLUp)held|=HidNpadButton_Up;if(held&HidNpadButton_StickLDown)held|=HidNpadButton_Down;if(down&dirs)repeat=SDL_GetTicks()+320;else if((held&dirs)&&SDL_GetTicks()>repeat){down|=held&dirs;repeat=SDL_GetTicks()+95;}
  struct Binding{u64 bit;Action a;};Binding bindings[]={{HidNpadButton_Left,LEFT},{HidNpadButton_Right,RIGHT},{HidNpadButton_Up,UP},{HidNpadButton_Down,DOWN},{HidNpadButton_A,CONFIRM},{HidNpadButton_B,BACK},{HidNpadButton_X,PLAY},{HidNpadButton_Y,HINT},{HidNpadButton_L,PASS},{HidNpadButton_R,SORT},{HidNpadButton_ZR,AUTO},{HidNpadButton_ZL,HISTORY},{HidNpadButton_Plus,PAUSE},{HidNpadButton_Minus,HELP}};for(auto b:bindings)if(down&b.bit)act(b.a);
@@ -272,9 +296,10 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;clearSelection();cursor=0;lastAI=now;if(m.explosive())sfx(3);else sfx(1);checkpoint();}
  if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0&&!capture&&now-lastAI>TURN_MS){doAutoMove();sfx(5);message("时间到，已自动出牌");lastAI=now;checkpoint();}
  if(smoke){if(frame==1){act(HELP);act(BACK);act(HINT);act(PLAY);}if(frame==2){act(PAUSE);act(BACK);act(AUTO);}if(frame>20)quit=true;}
+ if(reviewMode&&game.over&&!modal&&frame>10)modal=7;
  trimCache();if(screen)table();else{home();homeButtons();}overlay();clearFx(now);
  if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
- if((capture&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
+ if((capture&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10&&!reviewMode)||(reviewMode&&game.over&&modal==7&&frame>18)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
  SDL_RenderPresent(ren);frame++;SDL_Delay(16);
  }
  if(screen){checkpoint();}saveStats();for(auto&kv:cache)SDL_DestroyTexture(kv.second.t);for(auto&kv:fonts)TTF_CloseFont(kv.second);if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyRenderer(ren);SDL_DestroyWindow(window);TTF_Quit();SDL_Quit();

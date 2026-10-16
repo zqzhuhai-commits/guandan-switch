@@ -47,3 +47,13 @@
 - 旧 GD3 存档在真机上的读取表现（桌面已验证兼容）。
 
 preview 图片来自同源程序的桌面渲染，不是真机截图。
+
+八、v0.3 变更：原生单文件 NSP（无需 NRO）
+- 交付形态改为「单文件原生 NSP」：游戏本体（NSO+romfs）、中文字体、四家角色头像、鎏金图标、Nintendo 启动 Logo 全部内嵌，不再需要任何外置 NRO。
+- 构建：devkitPro devkitA64 环境（devkitpro/devkita64@sha256:82575e…）交叉编译 .elf → elf2nso 产出 GuandanSwitch.nso（5,409,966 字节）→ npdmtool 依据 config.json 生成原生 main.npdm（titleId 010000abcd000000，64 位，stack 0x40000）→ nacptool 生成 control.nacp（标题「掼蛋时光」/ 作者 Independent Homebrew / 版本 0.2.0）→ hacbrewpack 打包为单文件 NSP。
+- NSP 结构校验（PFS0 逐字节解析）：
+  · PFS0 魔数合法，含 3 个文件：Program NCA（22,427,136 B，内含 ExeFS main+main.npdm 与 RomFS：font.otf、FONT-LICENSE.txt、avatar0-3.png）、Control NCA（150,528 B，含 control.nacp 与 icon_AmericanEnglish.dat=icon.jpg 256×256）、Meta CNMT NCA（4,096 B）；
+  · Control 标题「掼蛋时光」、titleId 010000abcd000000 与 NPDM 一致。
+- 规则测试复跑 PASS：256 局自动对局、19,644 个动作。
+- 桌面冒烟测试 PASS；新增「复盘报告」（评分曲线+四家局势图+炸弹/牌力统计）截图 preview/review.png 验证。
+- 预览更新为 8 张（home/game/training/help/settings/emote/over/review，1280×720 真实渲染）。
