@@ -23,7 +23,7 @@ using namespace gd;
 
 static constexpr int W=1280,H=720;
 static SDL_Renderer*ren=nullptr;static SDL_Window*window=nullptr;
-static SDL_Texture*avTex[4]={nullptr,nullptr,nullptr,nullptr};static SDL_Texture*bgTex[2]={nullptr,nullptr};
+static SDL_Texture*avTex[4]={nullptr,nullptr,nullptr,nullptr};static SDL_Texture*bgTex[3]={nullptr,nullptr,nullptr};
 static std::map<int,TTF_Font*>fonts;
 struct TextTex{SDL_Texture*t;int w,h;};static std::map<std::string,TextTex>cache;
 struct Col{Uint8 r,g,b,a=255;};
@@ -63,7 +63,7 @@ void circle(int x,int y,int r,Col c){color(c);for(int i=-r;i<=r;i++){int dx=int(
 void vgrad(int x,int y,int w,int h,Col a,Col b){for(int i=0;i<h;i++){double t=h>1?i/double(h-1):0;rect(x,y+i,w,1,{Uint8(a.r*(1-t)+b.r*t),Uint8(a.g*(1-t)+b.g*t),Uint8(a.b*(1-t)+b.b*t)});}}
 void box(int x,int y,int w,int h,int r,Col c){r=std::min(r,std::min(w,h)/2);color(c);for(int row=0;row<h;row++){int inset=0;if(row<r){int dy=r-row;inset=r-int(std::sqrt(double(r*r-dy*dy)));}else if(row>=h-r){int dy=row-(h-r-1);inset=r-int(std::sqrt(double(r*r-dy*dy)));}SDL_RenderDrawLine(ren,x+inset,y+row,x+w-inset-1,y+row);}}
 void roundedGradient(int x,int y,int w,int h,int r,Col a,Col b){
- for(int row=0;row<h;row++){int dy=row<r?r-row:row>=h-r?row-(h-r-1):0;int inset=dy?r-int(std::sqrt(double(r*r-dy*dy))):0;float t=row/float(std::max(1,h-1));rect(x+inset,y+row,w-inset*2,1,{Uint8(a.r*(1-t)+b.r*t),Uint8(a.g*(1-t)+b.g*t),Uint8(a.b*(1-t)+b.b*t)});}
+ for(int row=0;row<h;row++){int dy=row<r?r-row:row>=h-r?row-(h-r-1):0;int inset=dy?r-int(std::sqrt(double(r*r-dy*dy))):0;float t=row/float(std::max(1,h-1));rect(x+inset,y+row,w-inset*2,1,{Uint8(a.r*(1-t)+b.r*t),Uint8(a.g*(1-t)+b.g*t),Uint8(a.b*(1-t)+b.b*t),Uint8(a.a*(1-t)+b.a*t)});}
 }
 void boxOutline(int x,int y,int w,int h,int r,Col c){box(x,y,w,h,r,c);}
 
@@ -96,20 +96,28 @@ void cardFace(int id,int x,int y,int w,int h,bool sel,bool focused,bool up=true)
 }
 // ---------------- avatars ----------------
 void loadAvatars(){
- const char* names[]={"avatar0.png","avatar1.png","avatar2.png","avatar3.png"};
+ const std::string root=fontPath.rfind("romfs:",0)==0?"romfs:/":"romfs/";
+ int aw=0,ah=0,an=0;unsigned char*atlas=stbi_load((root+"characters.png").c_str(),&aw,&ah,&an,4);
+ const char*names[]={"avatar0.png","avatar1.png","avatar2.png","avatar3.png"};
  for(int i=0;i<4;i++){
-  std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
-  int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
+  int w=0,h=0,n=0;unsigned char*px=nullptr;std::vector<unsigned char> portrait;
+  if(atlas&&aw>=4&&ah>0){
+   // Read each portrait from the supplied atlas at runtime; preserve the original asset.
+   int cell=aw/4;w=h=std::min(cell,ah);portrait.resize(w*h*4);
+   for(int yy=0;yy<h;yy++)for(int xx=0;xx<w;xx++)for(int c=0;c<4;c++)portrait[(yy*w+xx)*4+c]=atlas[(yy*aw+i*cell+xx)*4+c];
+   px=portrait.data();
+  }else px=stbi_load((root+names[i]).c_str(),&w,&h,&n,4);
   if(!px){fprintf(stderr,"Avatar %s failed: %s\n",names[i],stbi_failure_reason());continue;}
   for(int yy=0;yy<h;yy++)for(int xx=0;xx<w;xx++){float dx=(xx-w/2.0f)/(w*.49f),dy=(yy-h/2.0f)/(h*.49f);if(dx*dx+dy*dy>1)px[(yy*w+xx)*4+3]=0;}
   SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA32);
   if(sf){avTex[i]=SDL_CreateTextureFromSurface(ren,sf);SDL_SetTextureBlendMode(avTex[i],SDL_BLENDMODE_BLEND);SDL_FreeSurface(sf);}
-  stbi_image_free(px);
+  if(portrait.empty())stbi_image_free(px);
  }
+ stbi_image_free(atlas);
 }
 void loadBg(){
- const char*names[]={"bghome.png","bgtable.png"};
- for(int i=0;i<2;i++){
+ const char*names[]={"bghome.png","bgtable.png","lobby-seaside.png"};
+ for(int i=0;i<3;i++){
   std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
   int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
   if(!px){fprintf(stderr,"Bg %s failed: %s\n",names[i],stbi_failure_reason());continue;}
@@ -160,10 +168,10 @@ void clearFx(Uint32 now){fxList.erase(std::remove_if(fxList.begin(),fxList.end()
 // The lobby is drawn natively so labels remain crisp on handheld and TV output.
 void bgHome(){
  vgrad(0,0,W,H,{39,63,125},{14,19,53});
- for(int i=0;i<9;i++){int y=130+i*58;line(0,y,1280,y-180,{137,174,255,13});}
- for(int i=0;i<36;i++){int x=(i*167+39)%W,y=(i*79+100)%H;circle(x,y,i%5==0?2:1,{186,207,255,60});}
- circle(80,450,190,{88,111,202,15});circle(1190,40,220,{133,103,229,16});
- rect(0,0,W,92,{9,15,43,140});hline(60,91,1128,{156,181,255,45});
+ if(bgTex[2]){SDL_Rect d{0,92,W,720};SDL_RenderCopy(ren,bgTex[2],nullptr,&d);rect(0,92,W,H-92,{14,34,70,24});}
+ else{for(int i=0;i<9;i++){int y=130+i*58;line(0,y,1280,y-180,{137,174,255,13});}for(int i=0;i<36;i++){int x=(i*167+39)%W,y=(i*79+100)%H;circle(x,y,i%5==0?2:1,{186,207,255,60});}}
+ rect(0,0,W,92,{9,15,43,220});hline(60,91,1128,{156,181,255,80});
+ rect(0,592,W,128,{8,15,35,190});
 }
 void bgTable(){
  if(bgTex[1]&&skin==0){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);rect(0,0,W,H,{6,16,12,58});}
@@ -179,20 +187,19 @@ void home(){
  bgHome();circle(82,46,23,GOLD);text("掼",82,28,26,{32,43,82},true);text("掼蛋时光",120,23,31,WHITE);
  box(302,30,106,30,15,{115,150,255,30});text("离线俱乐部",355,35,15,{188,211,255},true);
  text("累计对局  "+std::to_string(total),824,34,18,CREAM);text("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,34,18,GOLD);
- text("好牌好搭档，随时开一桌",60,120,30,WHITE);text("四人组队 / 双副牌 / 逢人配",1040,134,17,{174,196,240},true);
- box(60,206,374,348,24,{13,27,66,180});box(80,226,105,28,14,{246,198,74,28});text("今日牌友",132,230,15,GOLD,true);
- if(avTex[0]){SDL_Rect d{160,258,174,174};SDL_RenderCopy(ren,avTex[0],nullptr,&d);}else face(247,340,74,0);
- ring(247,345,91,2,{169,194,251,80});text("好配合，就是好手气",247,450,26,WHITE,true);text("经典升级 · 默契搭档 · 从 2 打到 A",247,494,17,{171,194,235},true);
+ box(460,114,720,66,16,{12,24,50,170});text("好牌好搭档，随时开一桌",484,127,27,WHITE);text("双副牌 · 逢人配",1088,137,15,GOLD,true);
+ if(bgTex[2]){box(60,507,374,70,16,{10,22,44,195});text("好配合，就是好手气",247,517,23,WHITE,true);text("掼蛋时光 · 离线俱乐部",247,550,16,GOLD,true);}
+ else{box(60,206,374,348,24,{13,27,66,180});if(avTex[0]){SDL_Rect d{160,258,174,174};SDL_RenderCopy(ren,avTex[0],nullptr,&d);}text("好配合，就是好手气",247,450,26,WHITE,true);text("经典升级 · 默契搭档 · 从 2 打到 A",247,494,17,{171,194,235},true);}
  const char* titles[]={"快速开局","经典升级","明牌练习","定局挑战"};const char* tags[]={"QUICK PLAY","CLASSIC MATCH","OPEN HANDS","CHALLENGE"};
  const char* desc[]={"随机发牌，一局尽兴","从 2 打到 A，进贡还贡","看清四家 · 练习配合","固定发牌 · 反复推演"};
- Col tops[4]={{77,130,221},{110,93,189},{48,118,160},{111,80,156}};Col bots[4]={{40,70,148},{63,46,126},{28,67,105},{59,40,100}};
+ Col tops[4]={{65,114,201,235},{101,78,173,235},{37,103,146,235},{100,67,143,235}};Col bots[4]={{32,56,124,242},{53,37,113,242},{21,53,87,242},{47,31,85,242}};
  for(int i=0;i<4;i++){auto a=modeAreas[i];bool f=focus==i;box(a.x+3,a.y+6,a.w,a.h,20,{4,9,35,90});box(a.x-2,a.y-2,a.w+4,a.h+4,22,f?GOLD:Col{146,174,249,80});
   roundedGradient(a.x,a.y,a.w,a.h,20,tops[i],bots[i]);
   text(tags[i],a.x+24,a.y+16,13,{217,227,255});text(titles[i],a.x+24,a.y+(i<2?48:38),i<2?34:27,WHITE);text(desc[i],a.x+24,a.y+(i<2?99:80),17,{217,227,255});
   if(i<2){for(int j=0;j<3;j++)cardFace((i==0?36:40)+j,a.x+211+j*27,a.y+107-j*8,48,69,false,false);box(a.x+24,a.y+148,122,36,18,f?GOLD:Col{255,255,255,32});text(i==0?"即刻开桌  ›":"开始升级  ›",a.x+85,a.y+155,17,f?INK:WHITE,true);}
   else text("›",a.x+a.w-35,a.y+40,32,GOLD);
  }
- text("选择玩法后，可调整 AI 难度、节奏和倒计时",460,572,16,{174,196,240});
+ box(460,562,720,26,10,{8,18,37,150});text("选择玩法后，可调整 AI 难度、节奏和倒计时",478,565,15,CREAM);
 }
 void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+74,14,GOLD,true);}
 void counterPanel(){
