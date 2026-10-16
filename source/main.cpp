@@ -173,9 +173,15 @@ void drawFx(Uint32 now){
 void clearFx(Uint32 now){fxList.erase(std::remove_if(fxList.begin(),fxList.end(),[&](Fx&f){return now-f.t0>Uint32(f.dur);}),fxList.end());}
 // ---------------- screens ----------------
 // The lobby is drawn natively so labels remain crisp on handheld and TV output.
+void lobbyScrim(){
+ // Smooth alpha ramps protect edge controls while leaving the central scene clear.
+ for(int y=0;y<190;y++){float t=y/189.0f;float fade=1-t*t*(3-2*t);rect(0,y,W,1,{8,22,46,Uint8(224*fade)});}
+ for(int y=535;y<H;y++){float t=(y-535)/184.0f;float fade=t*t*(3-2*t);rect(0,y,W,1,{8,22,46,Uint8(222*fade)});}
+}
 void bgHome(){
  if(bgTex[2]){SDL_Rect d{0,0,W,H};SDL_RenderCopy(ren,bgTex[2],nullptr,&d);}
  else{vgrad(0,0,W,H,{39,63,125},{14,19,53});for(int i=0;i<9;i++){int y=130+i*58;line(0,y,1280,y-180,{137,174,255,13});}}
+ lobbyScrim();
 }
 void bgTable(){
  if(bgTex[1]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);}
@@ -221,7 +227,9 @@ void navIcon(int type,int x,int y,Col c){
 void homeButtons(){
  const char*labels[]={"继续上次对局","本地战绩","偏好设置","玩法说明"};
  for(int i=0;i<4;i++){auto a=navAreas[i];bool active=!modal&&focus==i+4,enabled=i!=0||hasSave;Col c=active?GOLD:enabled?WHITE:Col{209,218,228};
-  navIcon(i,a.x+a.w/2,a.y+15,c);floatingText(i==0&&!hasSave?"暂无进行中对局":labels[i],a.x+a.w/2,a.y+36,18,c,true);
+  box(a.x+28,a.y-1,a.w-56,72,18,active?GOLD:Col{207,224,255,65});
+  box(a.x+29,a.y,a.w-58,70,17,active?Col{29,58,97,200}:Col{9,27,53,135});
+  navIcon(i,a.x+a.w/2,a.y+15,c);floatingText(i==0&&!hasSave?"暂无进行中对局":labels[i],a.x+a.w/2,a.y+35,20,c,true);
   if(active){hline(a.x+a.w/2-58,a.y+65,116,GOLD);hline(a.x+a.w/2-58,a.y+66,116,GOLD);}
  }
  floatingText("方向键 选择   A 进入   − 规则",60,682,15);floatingText("离线单机 · 无需联网",1004,682,15);
@@ -229,7 +237,7 @@ void homeButtons(){
 void home(){
  bgHome();circle(82,46,23,GOLD);text("掼",82,28,26,{32,43,82},true);floatingText("掼蛋时光",120,23,31);
  floatingText("离线俱乐部",355,35,15,WHITE,true);
- floatingText("累计对局  "+std::to_string(total),824,34,18);floatingText("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,34,18,GOLD);
+ floatingText("累计对局  "+std::to_string(total),824,32,20);floatingText("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,32,20,GOLD);
  floatingText("好牌好搭档，随时开一桌",484,127,27);floatingText("双副牌 · 逢人配",1088,137,15,GOLD,true);
  if(bgTex[2]){floatingText("好配合，就是好手气",247,517,23,WHITE,true);floatingText("掼蛋时光 · 离线俱乐部",247,550,16,GOLD,true);}
  else{box(60,206,374,348,24,{13,27,66,180});if(avTex[0]){SDL_Rect d{160,258,174,174};SDL_RenderCopy(ren,avTex[0],nullptr,&d);}text("好配合，就是好手气",247,450,26,WHITE,true);text("经典升级 · 默契搭档 · 从 2 打到 A",247,494,17,{171,194,235},true);}
