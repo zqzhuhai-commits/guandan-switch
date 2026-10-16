@@ -23,7 +23,7 @@ using namespace gd;
 
 static constexpr int W=1280,H=720;
 static SDL_Renderer*ren=nullptr;static SDL_Window*window=nullptr;
-static SDL_Texture*avTex[4]={nullptr,nullptr,nullptr,nullptr};
+static SDL_Texture*avTex[4]={nullptr,nullptr,nullptr,nullptr};static SDL_Texture*bgTex[2]={nullptr,nullptr};
 static std::map<int,TTF_Font*>fonts;
 struct TextTex{SDL_Texture*t;int w,h;};static std::map<std::string,TextTex>cache;
 struct Col{Uint8 r,g,b,a=255;};
@@ -94,6 +94,17 @@ void loadAvatars(){
   stbi_image_free(px);
  }
 }
+void loadBg(){
+ const char*names[]={"bghome.png","bgtable.png"};
+ for(int i=0;i<2;i++){
+  std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
+  int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
+  if(!px){fprintf(stderr,"Bg %s failed: %s\n",names[i],stbi_failure_reason());continue;}
+  SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA8888);
+  if(sf){bgTex[i]=SDL_CreateTextureFromSurface(ren,sf);SDL_FreeSurface(sf);}
+  stbi_image_free(px);
+ }
+}
 void face(int x,int y,int r,int who){
  Col skinC=who==1?Col{242,208,172}:who==3?Col{214,172,134}:Col{236,198,160};
  circle(x,y,r,skinC);
@@ -134,7 +145,8 @@ void drawFx(Uint32 now){
 void clearFx(Uint32 now){fxList.erase(std::remove_if(fxList.begin(),fxList.end(),[&](Fx&f){return now-f.t0>Uint32(f.dur);}),fxList.end());}
 // ---------------- screens ----------------
 void bgHome(){
- vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
+ if(bgTex[0]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[0],nullptr,&dst);rect(0,0,W,H,{6,16,12,70});}
+ else vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
  for(int i=0;i<30;i++){int x=(i*137+37)%W,y=(i*73+21)%H;circle(x,y,1+((i*7)%2),{210,188,130,50});}
  int mx=1130,my=180;if(avTex[2]){SDL_Rect dst{mx-64,my-64,128,128};SDL_RenderCopy(ren,avTex[2],nullptr,&dst);}else face(mx,my,64,2);
  for(int i=0;i<3;i++)cardFace((i*2+10)*4+i,mx-30+i*20,my+70,40,58,false,false);
@@ -142,7 +154,8 @@ void bgHome(){
  text("GUANDAN  /  OFFLINE CLUB",66,44,16,GOLD);
 }
 void bgTable(){
- vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
+ if(bgTex[1]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);rect(0,0,W,H,{6,16,12,58});}
+ else vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
  for(int r=420;r>40;r-=38){circle(W/2,290,r,{255,255,255,Uint8(4)});}
  for(int i=0;i<24;i++){int x=(i*139+37)%W,y=(i*73+21)%H;circle(x,y,1,{210,188,130,40});}
  boxOutline(10,74,W-20,H-96,18,{0,0,0,50});
@@ -268,7 +281,7 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);if(!ren)ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
  SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
  fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20]){fprintf(stderr,"Font: %s\n",TTF_GetError());return 1;}
- loadAvatars();
+ loadAvatars();loadBg();
  SDL_AudioSpec spec{};spec.freq=48000;spec.format=AUDIO_S16SYS;spec.channels=1;spec.samples=1024;audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,nullptr,0);if(audioDevice)SDL_PauseAudioDevice(audioDevice,0);
  std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}
  if(captureGame||smoke){start(smoke?2:captureMode);if(captureOver)autoplay=true;}if(captureModal)modal=captureModal;Uint32 frame=0; while(!quit){

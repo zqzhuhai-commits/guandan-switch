@@ -1,27 +1,32 @@
 {
   "archive": "release/GuandanSwitch-v0.3.zip",
-  "size": 33395598,
-  "sha256": "b7cd1784425db9fcf5393607c2a536cd3b8b8eb6defe8ad403ab344f53c086cb",
+  "size": 38765787,
+  "sha256": "333cf29370b45f4422fe98e9e5fa3f03afb0e12578bc20b06a66c84654bfb41c",
   "parts": [
     {
-      "path": "release/GuandanSwitch-v0.3.zip.part00",
+      "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part00",
       "size": 9437184,
-      "sha256": "e76cba5b16a26e5f8e84785d819955b33baed55ba10cae4eeedd9fa01c33c956"
+      "sha256": "caaf67d2ce4d4c71bee8674c959e40036cd25fbe05ed7cf529f27ca68957e30f"
     },
     {
-      "path": "release/GuandanSwitch-v0.3.zip.part01",
+      "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part01",
       "size": 9437184,
-      "sha256": "cdc13d7edd1730c9e2be71d12cb188708eb869f4da23a47d7c9c39de001819ab"
+      "sha256": "c2b5bce278f1083527b2a56189185a7766a19ff77bbfebd256a80eb93833704e"
     },
     {
-      "path": "release/GuandanSwitch-v0.3.zip.part02",
+      "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part02",
       "size": 9437184,
-      "sha256": "4d1923762aeaccdbb725133badbbcf0a675e64440707fd2c1a5fe383908fdeb4"
+      "sha256": "bc2eddc6f9a4409a4b95f8bd6c8693ad51235bbfabd0a94563a526109fd1c20b"
     },
     {
-      "path": "release/GuandanSwitch-v0.3.zip.part03",
-      "size": 5084046,
-      "sha256": "a9ccd438c0a3bc4c91d0b645a9b28faefe3364594a7b0b71c2ecfbd64f84a920"
+      "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part03",
+      "size": 9437184,
+      "sha256": "bc271140603ca50b82b7e9f6df0bc642067bc698cd8fbda7e5f1022808d7edf5"
+    },
+    {
+      "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part04",
+      "size": 1017051,
+      "sha256": "7a9c56cf0017fdd9e57c482b2baa450bf8aaede5a99a38970fec75c3e2198dac"
     }
   ]
 }
