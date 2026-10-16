@@ -1,26 +1,49 @@
-掼蛋时光 Switch v0.1 — 验证报告
+掼蛋时光 Switch v0.2 — 验证报告（图标 v2 更新版）
+日期：2026-10-16（图标更新：用户提供“掼蛋时光”鎏金宣传图替换原破壳小鸡图标，重编 NRO/NSP）
 
-已完成：
-- devkitA64 15.2.0 / libnx / SDL2 原生 ARM64 编译，零编译警告。
-- 同源桌面 SDL2 程序启动、规则弹窗、提示出牌、暂停、托管和退出冒烟测试通过。
-- 大厅、牌桌、明牌练习、设置、规则页面实际渲染并人工检查。
-- 规则回归测试通过：
-PASS: recognition, wildcard, bomb hierarchy, illegal actions, lead transfer, save/load; 256 AI deals, 19644 actions
+一、规则引擎
+- 回归测试通过：
+  PASS: recognition, wildcard, bomb hierarchy, illegal actions, lead transfer, save/load; 256 AI deals, 19644 actions
+- 新增：TOTAL_RANK 双副牌常量、used[18] 余牌计数（记牌器数据源，deal 重置 / play 累计）；
+  存档协议升级 GD4（追加 16 个余牌值），load() 兼容旧 GD3（按 108−剩余手牌−桌面牌反推）。
 
-- AddressSanitizer 与 UndefinedBehaviorSanitizer 检查通过。
-  环境不支持 LeakSanitizer 的线程枚举，因此设置 detect_leaks=0；未声称完成泄漏检测。
-- 二副牌全部点数、花色一致性，双配牌对子和十张炸弹与四王比较已覆盖。
+二、桌面界面（与 Switch 同源 SDL2 代码）
+- SDL2 2.0.22 + SDL2_ttf 2.0.18 本地源码构建，make -f Makefile.desktop 编译通过（仅缩进/未用变量无害警告）。
+- --smoke 冒烟通过；--capture 系列生成 1280×720 渲染图并逐张目检 + OCR 复核：
+  home（大厅）/ game（牌桌）/ training（明牌练习）/ help（规则）/ settings（设置）/
+  emote（快捷表情）/ over（结算：名次、升级、已出完、皇冠、按钮）——均正常。
+- 记牌器、18 秒倒计时、三皮肤、特效、表情弹窗、结算页均已在截图可见状态验证。
 
-二进制结构：
-NRO0/ASET headers: PASS
-Icon JPEG / NACP / embedded RomFS bounds: PASS
-ARM64 ELF static PIE: PASS
-NRO bytes: 25382079
-SHA256: aa6a2cd6588f3bab1f0e49ef6047cd297e6c09831c85dae228d9ff4c3d43483c
+三、Switch ARM64 NRO
+- 使用与 README 一致的原开发环境镜像 devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d
+  （Docker Hub 拉 4 层约 700MB，chroot 进入根文件系统后 make -j2）。
+- 产物：switch/GuandanSwitch/GuandanSwitch.nro，25,431,299 字节。
+- 内嵌图标核验：在 NRO 0x885038 处定位图标区，与 icon.jpg（256×256，39,167 字节）逐字节一致。
+- NACP（Guandan Time / 0.1.0）与 RomFS（font.otf、FONT-LICENSE.txt）已嵌入。
 
-未完成：
-- 实体 Switch 启动和完整游玩验证。
-- 真机触屏、音频、休眠恢复与电视输出性能测试。
-- 职业强度 AI 评估。
+四、NSP 前端
+- 方案：社区标准 forwarder（hbloader 派生 stub，exefs/main + main.npdm，加载 sdmc:/switch/GuandanSwitch/GuandanSwitch.nro）
+  + 明文 NCA（无需主机密钥；使用公开跨机器通用常量 header_key / key_area_key_application_00）。
+- 打包：@tootallnate/hacbrewpack（nsp-forwarder.n8.io 同源 TS 实现，plaintext=true）。
+- 产物：GuandanTime.nsp，363,224 字节。
+- 校验：
+  · PFS0 含 Program / Control / Meta(CNMT) 三个 NCA，NCA3 魔数合法；
+  · Program：Title ID 010000abcd000000，exefs（main + main.npdm）、romfs（nextNroPath/nextArgv = sdmc:/switch/GuandanSwitch/GuandanSwitch.nro，已在 NSP 0x224d8 处逐字节核验）、logo 齐全；
+  · Control：标题「掼蛋时光」、作者 Independent Homebrew、版本 0.1.0，icon_AmericanEnglish.dat 为 256×256 无 EXIF JPEG（与 icon.jpg 同源，去除元数据后 37,714 字节，已在 NSP 0x4bcd8 处逐字节核验）；
+  · CNMT Title ID 一致。
+
+五、发行包
+- release/GuandanSwitch-v0.2.zip.part00~03 与 manifest.json 已按新产物重建，SHA-256 已登记。
+- 内容：GuandanSwitch.nro、GuandanTime.nsp、icon.jpg、source/、preview/（7 张）、README.md、font.otf。
+
+六、v0.1 基线结论（历史记录）
+- v0.1 曾完成：ASan/UBSan 检查通过（LeakSanitizer 因环境线程枚举限制未启用，未声称泄漏检测）；
+  二副牌点数/花色一致性、双配牌对子、十张炸弹与四王比较覆盖；NRO0/ASET headers、Icon/NACP/RomFS bounds、ARM64 static PIE 结构检查 PASS。
+- v0.2 规则代码仅新增 used 计数与存档字段，牌型/比较逻辑未改动；上述 v0.1 结构检查口径对 v0.2 NRO 同样适用（未重跑 ASan）。
+
+七、未完成 / 待真机验证
+- 实体 Switch 启动与完整游玩；触屏、音频、休眠恢复、电视输出性能。
+- NSP 经 DBI/Tinfoil 等安装器的实际安装与主屏图标显示。
+- 旧 GD3 存档在真机上的读取表现（桌面已验证兼容）。
 
 preview 图片来自同源程序的桌面渲染，不是真机截图。

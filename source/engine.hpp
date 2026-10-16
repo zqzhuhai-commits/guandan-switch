@@ -15,6 +15,8 @@ inline bool wild(int id,int level){return Card{id}.rank()==level&&Card{id}.suit(
 inline int power(int rank,int level){return rank>=16?rank:rank==level?15:rank;}
 enum Kind{NONE,SINGLE,PAIR,TRIPLE,FULLHOUSE,STRAIGHT,PAIRS,TRIPLES,BOMB,FLUSH,JOKERS};
 inline const char* kindName(Kind k){const char* a[]={"自由出牌","单张","对子","三张","三带二","顺子","三连对","钢板","炸弹","同花顺","四大天王"};return a[k];}
+// Two decks of 54: ranks 2..A appear 8 times, each joker 4 times. Index by rank() (2..14,16,17).
+inline constexpr std::array<int,18> TOTAL_RANK{0,0,8,8,8,8,8,8,8,8,8,8,8,8,8,0,4,4};
 struct Move{Kind kind=NONE; int high=0; std::vector<int> cards; bool explosive()const{return kind>=BOMB;} };
 inline int bombPower(const Move&m){if(m.kind==JOKERS)return 10000;if(m.kind==FLUSH)return 550+m.high;return int(m.cards.size())*100+m.high;}
 inline bool beats(const Move&a,const Move&b){if(a.kind==NONE)return false;if(b.kind==NONE)return true;if(a.explosive())return !b.explosive()||bombPower(a)>bombPower(b);return !b.explosive()&&a.kind==b.kind&&a.cards.size()==b.cards.size()&&a.high>b.high;}
@@ -57,6 +59,8 @@ inline Move identify(const std::vector<int>&cards,int level,const Move&target=Mo
 struct Game{
  std::array<std::vector<int>,4> hands;std::array<int,2> levels{2,2};int level=2,turn=0,last=-1,passes=0,mode=0,difficulty=1,round=0,first=0;bool over=false,champion=false;
  Move table;std::vector<int>finish,previous;std::vector<std::string>log;std::array<Move,4> shown;std::array<bool,4>passed{};std::string notice;uint32_t seed=0;
+ std::array<int,18> used{}; // cards already played this deal, by rank
+ int remaining(int r)const{int own=0;for(int id:hands[0])if(Card{id}.rank()==r)own++;int n=TOTAL_RANK[r]-used[r]-own;return n<0?0:n;}
  void note(const std::string&s){notice=s;log.push_back(s);if(log.size()>80)log.erase(log.begin());}
  void sort(){for(auto&h:hands)std::sort(h.begin(),h.end(),[&](int a,int b){int pa=power(Card{a}.rank(),level),pb=power(Card{b}.rank(),level);return pa!=pb?pa<pb:a<b;});}
  void newMatch(int m,uint32_t s){*this=Game{};mode=m;seed=s;deal();}
@@ -68,7 +72,7 @@ struct Game{
   if(ret<0)for(int id:t)if(!wild(id,level)&&(ret<0||power(Card{id}.rank(),level)<power(Card{ret}.rank(),level)))ret=id;
   if(ret<0){ret=t.front();}t.erase(std::find(t.begin(),t.end(),ret));t.push_back(best);h.push_back(ret);
  }
- void deal(){round++;table=Move{};finish.clear();shown={};passed={};last=-1;passes=0;over=false;for(auto&h:hands)h.clear();
+ void deal(){round++;table=Move{};used={};finish.clear();shown={};passed={};last=-1;passes=0;over=false;for(auto&h:hands)h.clear();
   std::vector<int>deck(108);for(int i=0;i<108;i++)deck[i]=i;std::mt19937 rng(seed+uint32_t(round)*7919u);std::shuffle(deck.begin(),deck.end(),rng);for(int i=0;i<108;i++)hands[i%4].push_back(deck[i]);
   turn=first;notice="新牌局开始";
   if(mode==1&&previous.size()==4){
@@ -89,7 +93,7 @@ struct Game{
  bool play(int p,const std::vector<int>&cards){
   if(over||p!=turn){return false;}std::set<int> unique(cards.begin(),cards.end());if(unique.size()!=cards.size())return false;for(int id:cards)if(std::find(hands[p].begin(),hands[p].end(),id)==hands[p].end())return false;
   Move m=identify(cards,level,table);if(m.kind==NONE)return false;
-  for(int id:cards){auto&h=hands[p];h.erase(std::find(h.begin(),h.end(),id));}table=m;shown[p]=m;passed[p]=false;last=p;passes=0;note(std::string(p==0?"你":p==2?"队友":"对手")+"打出"+kindName(m.kind));
+  for(int id:cards){auto&h=hands[p];h.erase(std::find(h.begin(),h.end(),id));}for(int id:m.cards)used[Card{id}.rank()]++;table=m;shown[p]=m;passed[p]=false;last=p;passes=0;note(std::string(p==0?"你":p==2?"队友":"对手")+"打出"+kindName(m.kind));
   if(hands[p].empty()){finish.push_back(p);if(finish.size()==3||(finish.size()==2&&finish[0]%2==finish[1]%2)){complete();return true;}}
   turn=next(p);return true;
  }
@@ -115,16 +119,19 @@ struct Game{
  void autoStep(){Move m=hint(turn);if(m.kind==NONE){if(table.kind==NONE){auto ms=moves(hands[turn],level);if(!ms.empty())play(turn,ms.front().cards);}else pass(turn);}else play(turn,m.cards);}
  bool valid()const{std::set<int>s;for(auto&h:hands)for(int id:h)if(id<0||id>=108||!s.insert(id).second)return false;return turn>=0&&turn<4&&level>=2&&level<=14;}
  bool save(const std::string&path)const{
-  std::ofstream f(path+".tmp");if(!f)return false;f<<"GD3 "<<seed<<' '<<round<<' '<<mode<<' '<<difficulty<<' '<<level<<' '<<levels[0]<<' '<<levels[1]<<' '<<turn<<' '<<last<<' '<<passes<<' '<<first<<' '<<over<<' '<<champion<<'\n';
+  std::ofstream f(path+".tmp");if(!f)return false;f<<"GD4 "<<seed<<' '<<round<<' '<<mode<<' '<<difficulty<<' '<<level<<' '<<levels[0]<<' '<<levels[1]<<' '<<turn<<' '<<last<<' '<<passes<<' '<<first<<' '<<over<<' '<<champion<<'\n';
+  for(int r=2;r<=17;r++)f<<used[r]<<' ';f<<'\n';
   auto vec=[&](const std::vector<int>&v){f<<v.size();for(int x:v)f<<' '<<x;f<<'\n';};for(auto&h:hands)vec(h);vec(finish);vec(previous);f<<int(table.kind)<<' '<<table.high<<'\n';vec(table.cards);f.close();return std::rename((path+".tmp").c_str(),path.c_str())==0;
  }
- bool load(const std::string&path){std::ifstream f(path);std::string magic;Game g;if(!(f>>magic)||magic!="GD3")return false;f>>g.seed>>g.round>>g.mode>>g.difficulty>>g.level>>g.levels[0]>>g.levels[1]>>g.turn>>g.last>>g.passes>>g.first>>g.over>>g.champion;
+ bool load(const std::string&path){std::ifstream f(path);std::string magic;Game g;if(!(f>>magic)||(magic!="GD3"&&magic!="GD4"))return false;f>>g.seed>>g.round>>g.mode>>g.difficulty>>g.level>>g.levels[0]>>g.levels[1]>>g.turn>>g.last>>g.passes>>g.first>>g.over>>g.champion;
+  if(magic=="GD4"){for(int r=2;r<=17;r++){int v;if(!(f>>v)||v<0||v>16){f.setstate(std::ios::failbit);return false;}g.used[r]=v;}}
   auto vec=[&](std::vector<int>&v){int n;if(!(f>>n)||n<0||n>108){f.setstate(std::ios::failbit);return;}for(int i=0,x;i<n;i++){f>>x;v.push_back(x);}};for(auto&h:g.hands)vec(h);vec(g.finish);vec(g.previous);int k;f>>k>>g.table.high;if(k<0||k>10)return false;g.table.kind=Kind(k);vec(g.table.cards);if(!f||!g.valid()||g.last < -1||g.last>3||g.mode<0||g.mode>3)return false;if(g.round<1||g.round>1000000||g.first<0||g.first>3||g.difficulty<0||g.difficulty>2||g.passes<0||g.passes>4||g.levels[0]<2||g.levels[0]>14||g.levels[1]<2||g.levels[1]>14)return false;
   for(auto&h:g.hands)if(h.size()>27)return false;
   auto places=[](const std::vector<int>&v){std::set<int>s;for(int p:v)if(p<0||p>3||!s.insert(p).second)return false;return true;};
   if(!places(g.finish)||!places(g.previous)||(!g.previous.empty()&&g.previous.size()!=4)||(g.over&&g.finish.size()!=4)||(!g.over&&g.hands[g.turn].empty()))return false;
   if(g.table.kind!=NONE&&(g.last<0||g.table.cards.empty()||g.table.cards.size()>10))return false;
   for(int id:g.table.cards)if(id<0||id>=108)return false;
+  if(magic=="GD3"){g.used={};for(auto&h:g.hands)for(int id:h)g.used[Card{id}.rank()]++;for(int id:g.table.cards)g.used[Card{id}.rank()]++;for(int r=2;r<=17;r++)g.used[r]=TOTAL_RANK[r]>g.used[r]?TOTAL_RANK[r]-g.used[r]:0;}
   g.sort();g.notice="已恢复上次对局";*this=g;return true;}
 };
 }

@@ -1,22 +1,32 @@
-# 掼蛋时光 · Switch 原生单机测试版 v0.1
+# 掼蛋时光 · Switch 原生单机版 v0.2
 
 参考腾讯《大掼蛋》的休闲棋牌氛围，独立编写规则、AI 和界面；不含腾讯的程序、美术、角色、音频或账号服务。游戏完全离线，无内购、无联网、无真钱交易。
 
-[下载 v0.1 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.1.0/GuandanSwitch-v0.1.zip) · [单独下载 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.1.0/GuandanSwitch.nro)
+[下载 v0.2 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.2.0/GuandanSwitch-v0.2.zip) · [单独下载 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.2.0/GuandanSwitch.nro) · [下载 NSP 前端](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.2.0/GuandanTime.nsp)
 
 ![大厅预览](preview/home.png)
 
 ![明牌练习预览](preview/training.png)
 
+![结算预览](preview/over.png)
+
 ## 安装
 
+### 方式一：NSP 前端（推荐，主屏图标直启）
+
+1. 将 `GuandanTime.nsp` 通过 DBI / Tinfoil 等安装器安装（需支持 homebrew 的 CFW 系统）。
+2. 将 `GuandanSwitch.nro` 放入 SD 卡 `switch/GuandanSwitch/` 目录，确认程序位于 `sdmc:/switch/GuandanSwitch/GuandanSwitch.nro`。
+3. 主屏会出现“掼蛋时光”图标，点击直接进入游戏；NRO 仍可随时从 hbmenu 启动。
+
+### 方式二：hbmenu 传统启动
+
 1. 解压发行包，将 `switch` 文件夹合并到 SD 卡根目录。
-2. 确认程序位于 `sdmc:/switch/GuandanSwitch/GuandanSwitch.nro`。
+2. 将 `GuandanSwitch.nro` 放入 SD 卡 `switch/GuandanSwitch/` 目录，确认程序位于 `sdmc:/switch/GuandanSwitch/GuandanSwitch.nro`。
 3. 在支持 homebrew 的 Switch 系统中，通过 hbmenu 启动“Guandan Time”。
 
 中文字体内置在 NRO 中，无需另行下载资源。存档和设置写入相同目录的 `session.dat`、`profile.txt`。更新时保留这两个文件；可先备份整个目录。
 
-这是 homebrew NRO，不是官方 eShop 游戏或可供原厂系统直接安装的 NSP。普通未配置 homebrew 的系统无法运行。当前已完成交叉编译、桌面画面检查和自动测试，尚未经过实体 Switch 验证；不将这些检查等同于真机兼容性验证。
+这是 homebrew 程序：NSP 前端需要安装器与 CFW，普通未配置 homebrew 的原厂系统无法运行。当前已完成交叉编译、桌面画面检查和自动测试，尚未经过实体 Switch 验证；不将这些检查等同于真机兼容性验证。
 
 ## 四种模式
 
@@ -33,8 +43,8 @@
 
 | 按键 | 功能 |
 |---|---|
-| 方向键 / 左摇杆 | 大厅选项、手牌光标 |
-| A | 确认 / 选中或取消当前手牌 |
+| 方向键 / 左摇杆 | 大厅选项、手牌光标、弹窗选项 |
+| A | 确认 / 选中或取消当前手牌 / 发送表情 |
 | X | 打出所选牌 |
 | B | 清空选牌 / 关闭弹窗 / 结算返回大厅 |
 | Y | 提示选牌，确认后按 X 出牌 |
@@ -42,6 +52,7 @@
 | R | 按点数重新理牌 |
 | ZR | 开启或取消托管 |
 | ZL | 查看本次运行期间的出牌记录 |
+| Z | 快捷表情（8 条固定文案，方向键选择，A 发送） |
 | + | 对局暂停；在大厅按 + 退出 |
 | − | 玩法说明 |
 
@@ -49,13 +60,17 @@
 
 ## 功能
 
+- 腾讯《大掼蛋》风格的牌桌界面：翡翠绿、深海蓝、午夜紫三种绒面牌桌主题，圆角牌面、四角点数、逢人配金标、牌背花纹。
+- 四家卡通头像与表情：队友“小满”为破壳小鸡吉祥物，出牌方带金色光环，不出/已出完状态清晰。
+- 出牌飞行动画、炸弹爆裂特效、不出气泡、快捷表情气泡、结算撒花。
+- **全点数记牌器**：牌桌左上角显示 2~A、小王、大王在三家手中的剩余张数（不含自己），归零变红。
+- **出牌倒计时**：轮到你时 18 秒圆环倒计时，超时自动托管出牌；可在设置中关闭。
+- 三种音色操作音效、炸弹重低音、胜利琶音（波形合成，无外部音频文件）。
 - 1280×720 逻辑画布，窗口/电视输出按比例缩放。
-- 翡翠绿、深海蓝、午夜紫三种牌桌主题。
 - 三档启发式 AI：休闲、标准、进阶；均只依据自身牌和公开的余牌数量决策。
 - 三档 AI 出牌速度；基础操作音效可关闭。
 - 逢人配标记、提示、全自动托管、手牌整理、余牌数量提示。
 - 每次行动自动保存，可恢复未完成的牌局；战绩和偏好在本机保留。
-- 余牌提示显示未打出的大小王和级牌总数，包含自己手牌；不是全点数记牌器。
 - 托管中按 ZR 可重新接管。提示可能建议不出，按 L 执行。
 
 ## 本版规则口径
@@ -80,8 +95,8 @@
 
 - `tests/rules.cpp` 覆盖牌型、双副牌花色、配牌、四王与十张炸弹比较、非法操作、接风、存档恢复和连续进贡升级流程。
 - 四种模式共 256 局自动对局完成；具体输出见 `验证报告.txt`。
-- 桌面运行同一份 SDL2 界面，检查大厅、牌桌、明牌模式、设置和规则弹窗；`preview` 目录为程序实际渲染，不是真机截图。
-- Switch ARM64 NRO 已编译并检查文件结构；实体机上的启动、音频、触屏、休眠恢复和实际性能仍待验证。
+- 桌面运行同一份 SDL2 界面，检查大厅、牌桌、明牌模式、设置、规则、表情和结算弹窗；`preview` 目录为程序实际渲染（1280×720），不是真机截图。
+- Switch ARM64 NRO 已用与 v0.1 相同的开发环境重新编译（`devkitpro/devkita64@sha256:82575e…`），并核验内嵌新图标；NSP 前端已按社区标准结构生成并逐层校验（PFS0 → Program/Control/Meta NCA，标题、图标、NRO 路径一致）。实体机上的启动、音频、触屏、休眠恢复和实际性能仍待验证。
 - 进阶 AI 使用规则启发式策略，不是经过竞技训练的职业水平 AI。没有联网对战、本地多人、3D 角色、语音播报、背景音乐或残局编辑器。
 - 当前出牌记录不随退出保存；牌局状态、级别、设置和本地战绩会保存。
 
@@ -98,4 +113,6 @@ Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_
 
 桌面构建可用系统 SDL2/SDL2_ttf 开发包执行 `make -f Makefile.desktop`。测试：`g++ -std=c++17 -O2 tests/rules.cpp -o rules-test && ./rules-test`。
 
-原创代码按 MIT License 提供；第三方库与字体遵循各自许可，见 `licenses` 与字体目录的许可文件。
+NSP 前端由社区标准 forwarder（hbloader 派生，加载 `sdmc:/switch/GuandanSwitch/GuandanSwitch.nro`）打包而成，构建与校验过程见 `验证报告.txt`。
+
+原创代码按 MIT License 提供；第三方库与字体遵循各自许可，见 `licenses` 与字体目录的许可文件。App 图标采用用户提供的“掼蛋时光”鎏金宣传视觉（蓝色背景、金色立体字、蓝宝石金冠与三张扑克牌），缩放为 256×256 后内嵌于 NRO 与 NSP，不与腾讯任何资产共用。

@@ -1,27 +1,27 @@
 {
-  "archive": "dist/GuandanSwitch-v0.1.zip",
-  "sha256": "444dc415b578b02bfabe02821d2c5842a87bfeba4fe5490a581132f7b8196114",
-  "size": 31498267,
+  "archive": "dist/GuandanSwitch-v0.2.zip",
+  "sha256": "55f08c318c78db9487189a8d1c71f46290b5f307e4bbd2abd64c43e5239903be",
+  "size": 31893559,
   "parts": [
     {
-      "path": "release/GuandanSwitch-v0.1.zip.part01",
+      "path": "release/GuandanSwitch-v0.2.zip.part00",
       "size": 8388608,
-      "sha256": "37031d0077938712cbf5354d067580d2107ec236f57dd47b00b7ef24c5404dca"
+      "sha256": "cdf5536fe8265b1453b3b8479348c0478e9dd96849e797e3a81f442b1f2cbcdd"
     },
     {
-      "path": "release/GuandanSwitch-v0.1.zip.part02",
+      "path": "release/GuandanSwitch-v0.2.zip.part01",
       "size": 8388608,
-      "sha256": "d393db4356879f70593a1589f1efd799b12ccb7b65e8e153582cc09b784205cb"
+      "sha256": "3f505ecae041db6cce0bdf5f7ffc199a35e1ddbadccee47fc33105cb6d83da90"
     },
     {
-      "path": "release/GuandanSwitch-v0.1.zip.part03",
+      "path": "release/GuandanSwitch-v0.2.zip.part02",
       "size": 8388608,
-      "sha256": "0c968d502a840fbb34f95d5410a790f00e9920b2ebc55b9838fe9dfbf8b46a19"
+      "sha256": "9f0c954c7450167e07efaa7eebd6cc47ebc133d2fbf59456a550b29813680e43"
     },
     {
-      "path": "release/GuandanSwitch-v0.1.zip.part04",
-      "size": 6332443,
-      "sha256": "54a1335945698521a4c28b225e2cd802636b55f225fa4c0edaff9732d1c4352c"
+      "path": "release/GuandanSwitch-v0.2.zip.part03",
+      "size": 6727735,
+      "sha256": "60efe21df43f49991bbfb1386d560bc3979c36fb90d340c892232aa6f78e50da"
     }
   ]
 }
