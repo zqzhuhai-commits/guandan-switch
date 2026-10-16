@@ -1,27 +1,27 @@
 {
   "archive": "release/GuandanSwitch-v0.3.zip",
-  "size": 37552833,
-  "sha256": "a35b7d153e994c64df34a14664ebb3f691b013263924b4844735640a12694e4c",
+  "size": 37575452,
+  "sha256": "6c1ae4de48039ae0d490d22a401ab4555ba83ffe9536b48bea4c644d3120d9df",
   "parts": [
     {
       "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part00",
       "size": 9437184,
-      "sha256": "a54481c90bfe131ba79be74f7ed64d1cbde3a44830cd55841af0d73596dbf353"
+      "sha256": "d829c903dee922c14b97f4241d9c29f99a6da16219b84c873b05c84a0ab88c40"
     },
     {
       "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part01",
       "size": 9437184,
-      "sha256": "465fd172772529e70d5a34ab5099996849174b8d556ed78b633232436e66ce32"
+      "sha256": "7620238e458ba16ff53da3bcf56379ce50f98314b26531c7ae6655dd11160acc"
     },
     {
       "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part02",
       "size": 9437184,
-      "sha256": "52f481087853b260b71f0ef619e0f92507510fc3933ab0ac861fe53fd181e4a6"
+      "sha256": "b6d0f097f29c8aaeb39d1c79e9419bac7f02b4e786a8db714eba2568e1e914bf"
     },
     {
       "path": "/home/user/Doubao/chats/38447550422053122/guandan-switch/release/GuandanSwitch-v0.3.zip.part03",
-      "size": 9241281,
-      "sha256": "cbff384cce10725bf66223a2e0b7851e19ceb9c53624bee3989902723016e7ad"
+      "size": 9263900,
+      "sha256": "1c5902feb3d86a9f1ee8aa6ab3d62e6649cfc8197906822310fa2c59d6b078b9"
     }
   ]
 }

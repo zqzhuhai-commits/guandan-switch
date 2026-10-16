@@ -28,10 +28,10 @@ static std::map<int,TTF_Font*>fonts;
 struct TextTex{SDL_Texture*t;int w,h;};static std::map<std::string,TextTex>cache;
 struct Col{Uint8 r,g,b,a=255;};
 const Col INK{38,40,34},CREAM{255,248,228},GOLD{246,198,74},GOLD_D{198,150,40},
-  MUTED{158,190,176},WHITE{255,255,250},RED{212,64,64},DARK{10,36,26},
-  PANEL{20,54,42,244},PANEL2{14,38,31,246},GOLD_BORDER{246,198,74,120};
+  MUTED{158,190,176},WHITE{255,255,250},RED{212,64,64},DARK{8,12,16},
+  PANEL{12,16,20,240},PANEL2{8,12,16,244},GOLD_BORDER{246,198,74,120};
 struct Skin{Col top,bot,card,btnHover;};
-static Skin skins[3]={ {{12,82,52},{3,32,20},{240,236,222},{34,98,66}},   // 翡翠绿
+static Skin skins[3]={ {{12,82,52},{3,32,20},{240,236,222},{26,30,36,235}},   // 翡翠绿（按钮改半透明黑）
                       {{16,48,92},{6,18,46},{238,240,246},{34,76,124}}, // 深海蓝
                       {{58,34,88},{24,14,42},{246,240,250},{84,54,118}}}; // 午夜紫
 static std::string base="./",fontPath;static int skin=0,speed=1;static bool sound=true,quit=false,autoplay=false,recorder=true,timerOn=true;
@@ -169,7 +169,7 @@ void home(){
  text("好牌，好搭档。随时开一桌。",90,196,25,MUTED);
  box(90,244,432,36,12,{255,255,255,14});text("双副牌  ·  离线 AI  ·  手柄 / 触屏",107,249,17,GOLD);
  const char*titles[]={"快速开局","经典升级","明牌练习","定局挑战"};const char*desc[]={"一局尽兴  /  随机发牌","从 2 打到 A  /  自动进贡还贡","看清四家  /  拆牌与配合练习","固定种子  /  重试同一副牌"};const char*tag[]={"QUICK PLAY","CLASSIC MATCH","OPEN HANDS","SEED CHALLENGE"};
- for(int i=0;i<4;i++){int x=74+(i%2)*566,y=306+(i/2)*137;bool f=focus==i;if(f)box(x-3,y-3,546,122,22,GOLD);box(x,y,540,116,20,f?skins[skin].btnHover:Col{16,52,38,235});text("0"+std::to_string(i+1),x+24,y+15,17,GOLD);text(tag[i],x+66,y+16,14,MUTED);text(titles[i],x+24,y+38,29,CREAM);text(desc[i],x+24,y+80,17,MUTED);text("›",x+492,y+30,38,GOLD);}
+ for(int i=0;i<4;i++){int x=74+(i%2)*566,y=306+(i/2)*137;bool f=focus==i;if(f)box(x-3,y-3,546,122,22,GOLD);box(x,y,540,116,20,f?skins[skin].btnHover:Col{10,14,18,225});text("0"+std::to_string(i+1),x+24,y+15,17,GOLD);text(tag[i],x+66,y+16,14,MUTED);text(titles[i],x+24,y+38,29,CREAM);text(desc[i],x+24,y+80,17,MUTED);text("›",x+492,y+30,38,GOLD);}
 }
 void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+74,14,GOLD,true);}
 void counterPanel(){
@@ -220,7 +220,7 @@ void table(){
  if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
 }
 void overlay(){
- if(!modal)return;rect(0,0,W,H,{2,10,16,205});box(210,84,860,548,24,{20,52,42});
+ if(!modal)return;rect(0,0,W,H,{2,10,16,205});box(210,84,860,548,24,{12,16,20,240});
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","偏好设置","玩法说明"};for(int i=0;i<4;i++)button(340,196+i*80,600,items[i],focus==i);}
  if(modal==2){text("偏好设置",254,116,34,GOLD);std::string labels[]={"AI 策略："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"牌桌主题："+std::string(skin==0?"翡翠绿":skin==1?"深海蓝":"午夜紫"),"AI 出牌速度："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"操作音效："+std::string(sound?"开启":"关闭"),"记牌器："+std::string(recorder?"开启":"关闭"),"出牌倒计时："+std::string(timerOn?"开启":"关闭")};for(int i=0;i<6;i++)button(315,180+i*70,650,labels[i],focus==i);text("A 切换选项   B 返回",640,574,17,MUTED,true);}
  if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","← → 移动光标，A 选牌，X 出牌，B 清选，Y 提示，R 理牌。","L 不出，ZR 托管，ZL 出牌记录，+ 暂停，− 本页。","掌机支持点按选牌和按钮；倒计时结束自动出牌。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
