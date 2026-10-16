@@ -7,7 +7,7 @@ import subprocess
 import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT/'dist'
-PACKAGE = DIST/'GuandanSwitch-v0.4'
+PACKAGE = DIST/'GuandanSwitch-v0.4.1'
 PACKAGE.mkdir(exist_ok=True)
 shutil.copy2(DIST/'GuandanSwitch.nro', PACKAGE/'GuandanSwitch.nro')
 notes = (ROOT/'release/notes-v0.4.md').read_text()
@@ -31,7 +31,7 @@ font = PACKAGE/'source-project/romfs/font.otf'
 font.parent.mkdir(parents=True, exist_ok=True)
 shutil.copy2(ROOT/'romfs/font.otf', font)
 subprocess.run(['git','rev-parse','HEAD'], cwd=ROOT, check=True, stdout=(PACKAGE/'SOURCE-COMMIT.txt').open('w'))
-archive = DIST/'GuandanSwitch-v0.4.zip'
+archive = DIST/'GuandanSwitch-v0.4.1.zip'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
     for p in sorted(PACKAGE.rglob('*')):
         if p.is_file(): z.write(p, p.relative_to(DIST))

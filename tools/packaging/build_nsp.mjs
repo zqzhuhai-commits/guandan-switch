@@ -29,7 +29,7 @@ for(let i=0;i<count;i++){
  const nca=bytes.subarray(dataStart+off,dataStart+off+len);
  if(!name.startsWith(createHash('sha256').update(nca).digest('hex').slice(0,32)))throw new Error('NCA content hash mismatch');
  const parsed=await parseNca(new Blob([nca]),{keys});
- if(parsed.contentType===0){const section=parsed.sections.find(s=>s.romfsData);if(!section)throw new Error('Missing native RomFS');const files=await decode(section.romfsData);for(const name of ['font.otf','lobby-seaside.png','characters.png']){if(!(files[name] instanceof Blob)||files[name].size!==romfs[name].size)throw new Error('Missing embedded '+name);}checkedResources=true;}
+ if(parsed.contentType===0){const section=parsed.sections.find(s=>s.romfsData);if(!section)throw new Error('Missing native RomFS');const files=await decode(section.romfsData);for(const name of ['font.otf','lobby-seaside.png','characters.png']){if(!(files[name] instanceof Blob)||createHash('sha256').update(Buffer.from(await files[name].arrayBuffer())).digest('hex')!==createHash('sha256').update(Buffer.from(await romfs[name].arrayBuffer())).digest('hex'))throw new Error('Missing or stale embedded '+name);}checkedResources=true;}
 }
 if(!checkedResources)throw new Error('Program NCA not verified');
 await writeFile(resolve(root,'dist/GuandanTime.nsp'),bytes);

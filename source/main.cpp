@@ -92,8 +92,8 @@ void start(int mode,uint32_t seed=0){int diff=game.difficulty;game.newMatch(mode
 
 // ---------------- cards ----------------
 void cardFace(int id,int x,int y,int w,int h,bool sel,bool focused,bool up=true){
- if(!up){box(x+2,y+5,w,h,7,{0,0,0,55});Col c=skins[skin].card;box(x,y,w,h,7,{Uint8(c.r*0.72),Uint8(c.g*0.72),Uint8(c.b*0.72)});box(x+4,y+4,w-8,h-8,5,{255,255,255,26});int cx=x+w/2,cy=y+h/2;ring(cx,cy,std::min(w,h)/4,3,GOLD_BORDER);line(x+8,y+h-10,x+w-10,y+8,{255,255,255,22});line(x+8,y+8,x+w-10,y+h-10,{255,255,255,22});return;}
- if(sel){y-=18;}box(x+2,y+5,w,h,7,{0,0,0,60});if(sel||focused)box(x-3,y-3,w+6,h+6,9,focused?GOLD:Col{80,200,160});box(x,y,w,h,8,sel?Col{255,246,214}:skins[skin].card);
+ if(!up){box(x+2,y+5,w,h,7,{0,0,0,55});Col c=skins[skin].card;box(x,y,w,h,7,{0,0,0});box(x+1,y+1,w-2,h-2,6,{Uint8(c.r*0.72),Uint8(c.g*0.72),Uint8(c.b*0.72)});box(x+4,y+4,w-8,h-8,5,{255,255,255,26});int cx=x+w/2,cy=y+h/2;ring(cx,cy,std::min(w,h)/4,3,GOLD_BORDER);line(x+8,y+h-10,x+w-10,y+8,{255,255,255,22});line(x+8,y+8,x+w-10,y+h-10,{255,255,255,22});return;}
+ if(sel){y-=18;}box(x+2,y+5,w,h,7,{0,0,0,60});if(sel||focused)box(x-3,y-3,w+6,h+6,9,focused?GOLD:Col{80,200,160});box(x,y,w,h,8,{0,0,0});box(x+1,y+1,w-2,h-2,7,sel?Col{255,246,214}:skins[skin].card);
  hline(x+8,y+h-4,w-16,{176,172,160,65});
  int r=Card{id}.rank(),s=Card{id}.suit();Col c=(s==1||s==2||r==17)?RED:INK;std::string suits[]={"♠","♥","♦","♣",""};
  int rs=w<46?12:w<62?15:w<82?19:24,ss=w<46?11:w<62?14:w<82?17:22;

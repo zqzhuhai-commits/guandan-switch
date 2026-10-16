@@ -1,4 +1,4 @@
-name: Build and release Switch v0.4
+name: Build and release Switch v0.4.1
 on:
   push:
     branches: [main, 'codex/lounge-and-table-upgrade']
@@ -27,11 +27,11 @@ jobs:
           docker run --rm -v "$PWD:/project" -w /project devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d bash -lc '
             export DEVKITPRO=/opt/devkitpro DEVKITA64=/opt/devkitpro/devkitA64
             export PATH=/opt/devkitpro/portlibs/switch/bin:/opt/devkitpro/tools/bin:/opt/devkitpro/devkitA64/bin:$PATH
-            make APP_JSON= APP_VERSION=0.4.0 -j2
+            make APP_JSON= APP_VERSION=0.4.1 -j2
             cp GuandanSwitch.nro dist/GuandanSwitch.nro
             elf2nso GuandanSwitch.elf dist/native/main
             npdmtool config.json dist/native/main.npdm
-            nacptool --create "掼蛋时光" "Independent Homebrew" "0.4.0" dist/native/control.nacp --titleid=010000abcd000000
+            nacptool --create "掼蛋时光" "Independent Homebrew" "0.4.1" dist/native/control.nacp --titleid=010000abcd000000
           '
           python3 tools/verify_nro.py dist/GuandanSwitch.nro
       - uses: actions/upload-artifact@v4
@@ -66,9 +66,9 @@ jobs:
       - run: python3 tools/package_release.py
       - uses: actions/upload-artifact@v4
         with:
-          name: GuandanSwitch-v0.4
+          name: GuandanSwitch-v0.4.1
           path: |
-            dist/GuandanSwitch-v0.4.zip
+            dist/GuandanSwitch-v0.4.1.zip
             dist/GuandanSwitch.nro
             dist/GuandanTime.nsp
             dist/SHA256SUMS.txt
@@ -78,10 +78,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if gh release view v0.4.0 >/dev/null 2>&1; then
-            echo 'v0.4.0 already exists; no existing release assets will be replaced.'
+          if [ ! -f dist/GuandanTime.nsp ]; then
+            echo 'Native build ready; awaiting locally verified NSP before release.'
+            exit 0
+          fi
+          if gh release view v0.4.1 >/dev/null 2>&1; then
+            echo 'v0.4.1 already exists; no existing release assets will be replaced.'
           else
-            files=(dist/GuandanSwitch-v0.4.zip dist/GuandanSwitch.nro dist/SHA256SUMS.txt)
+            files=(dist/GuandanSwitch-v0.4.1.zip dist/GuandanSwitch.nro dist/SHA256SUMS.txt)
             if [ -f dist/GuandanTime.nsp ]; then files+=(dist/GuandanTime.nsp); fi
-            gh release create v0.4.0 "${files[@]}" --target "$GITHUB_SHA" --title '掼蛋时光 v0.4 · 全屏界面与交互升级测试版' --notes-file dist/RELEASE-NOTES.md --prerelease
+            gh release create v0.4.1 "${files[@]}" --target "$GITHUB_SHA" --title '掼蛋时光 v0.4.1 · 全屏界面与交互升级测试版' --notes-file dist/RELEASE-NOTES.md --prerelease
           fi
