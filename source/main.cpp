@@ -38,6 +38,15 @@ static std::string base="./",fontPath;static int skin=0,speed=1;static bool soun
 static SDL_AudioDeviceID audioDevice=0;static Game game;static int screen=0,modal=0,focus=0,cursor=0;static bool selected[108]{};
 static Uint32 lastAI=0,toastUntil=0;static std::string toast;static int total=0,wins=0,bombs=0,statRound=-1;static bool hasSave=false;
 static constexpr Uint32 TURN_MS=18000;
+static Uint32 pausedAt=0;static int pendingMode=0,historyPage=0,hintIndex=-1;
+static std::vector<Move> hintOptions;static size_t hintAction=0;static uint32_t hintSeed=0;static int hintRound=0;
+struct Area { int x,y,w,h;bool contains(int px,int py)const{return px>=x&&px<x+w&&py>=y&&py<y+h;} };
+static const Area modeAreas[4]={{460,206,350,210},{830,206,350,210},{460,436,350,118},{830,436,350,118}};
+static const Area navAreas[4]={{60,609,270,48},{346,609,270,48},{632,609,270,48},{918,609,270,48}};
+void setModal(int next){Uint32 now=SDL_GetTicks();if(!modal&&next)pausedAt=now;if(modal&&!next)lastAI+=now-pausedAt;modal=next;}
+std::vector<int> selection(){std::vector<int> out;for(int id:game.hands[0])if(selected[id])out.push_back(id);return out;}
+void resetHints(){hintIndex=-1;hintOptions.clear();}
+
 enum FxType{FX_PLAY,FX_BOMB,FX_PASS,FX_EMOTE,FX_WIN};
 struct Fx{int type;Uint32 t0;int dur;int sx,sy,dx,dy;std::vector<int> cards;std::string text;};
 static std::vector<Fx> fxList;
@@ -53,6 +62,9 @@ void arc(int cx,int cy,int r,int th,float a0,float a1,Col c){color(c);for(float 
 void circle(int x,int y,int r,Col c){color(c);for(int i=-r;i<=r;i++){int dx=int(std::sqrt(double(r*r-i*i)));SDL_RenderDrawLine(ren,x-dx,y+i,x+dx,y+i);}}
 void vgrad(int x,int y,int w,int h,Col a,Col b){for(int i=0;i<h;i++){double t=h>1?i/double(h-1):0;rect(x,y+i,w,1,{Uint8(a.r*(1-t)+b.r*t),Uint8(a.g*(1-t)+b.g*t),Uint8(a.b*(1-t)+b.b*t)});}}
 void box(int x,int y,int w,int h,int r,Col c){r=std::min(r,std::min(w,h)/2);color(c);for(int row=0;row<h;row++){int inset=0;if(row<r){int dy=r-row;inset=r-int(std::sqrt(double(r*r-dy*dy)));}else if(row>=h-r){int dy=row-(h-r-1);inset=r-int(std::sqrt(double(r*r-dy*dy)));}SDL_RenderDrawLine(ren,x+inset,y+row,x+w-inset-1,y+row);}}
+void roundedGradient(int x,int y,int w,int h,int r,Col a,Col b){
+ for(int row=0;row<h;row++){int dy=row<r?r-row:row>=h-r?row-(h-r-1):0;int inset=dy?r-int(std::sqrt(double(r*r-dy*dy))):0;float t=row/float(std::max(1,h-1));rect(x+inset,y+row,w-inset*2,1,{Uint8(a.r*(1-t)+b.r*t),Uint8(a.g*(1-t)+b.g*t),Uint8(a.b*(1-t)+b.b*t)});}
+}
 void boxOutline(int x,int y,int w,int h,int r,Col c){box(x,y,w,h,r,c);}
 
 void text(const std::string&s,int x,int y,int size,Col c=CREAM,bool centered=false){if(s.empty())return;std::string key=std::to_string(size)+":"+std::to_string(c.r)+","+std::to_string(c.g)+","+std::to_string(c.b)+":"+s;
@@ -69,13 +81,13 @@ void clearSelection(){std::fill(std::begin(selected),std::end(selected),false);}
 void saveStats(){std::ofstream f(base+"profile.txt");f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn;}
 void checkpoint(){hasSave=game.save(base+"session.dat");if(!hasSave)message("存档写入失败，请检查 SD 卡空间");}
 void recordResult(){if(game.over&&statRound!=game.round){statRound=game.round;total++;if(game.finish[0]%2==0)wins++;saveStats();}}
-void start(int mode){int diff=game.difficulty;game.newMatch(mode,mode==3?20261016u:uint32_t(std::time(nullptr)));game.difficulty=diff;screen=1;modal=0;autoplay=false;cursor=0;clearSelection();statRound=-1;lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};checkpoint();}
+void start(int mode,uint32_t seed=0){int diff=game.difficulty;game.newMatch(mode,seed?seed:mode==3?20261016u:uint32_t(std::time(nullptr)));game.difficulty=diff;screen=1;modal=0;autoplay=false;cursor=0;clearSelection();statRound=-1;resetHints();lastOver=false;lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};checkpoint();}
 
 // ---------------- cards ----------------
 void cardFace(int id,int x,int y,int w,int h,bool sel,bool focused,bool up=true){
  if(!up){box(x+2,y+5,w,h,7,{0,0,0,55});Col c=skins[skin].card;box(x,y,w,h,7,{Uint8(c.r*0.72),Uint8(c.g*0.72),Uint8(c.b*0.72)});box(x+4,y+4,w-8,h-8,5,{255,255,255,26});int cx=x+w/2,cy=y+h/2;ring(cx,cy,std::min(w,h)/4,3,GOLD_BORDER);line(x+8,y+h-10,x+w-10,y+8,{255,255,255,22});line(x+8,y+8,x+w-10,y+h-10,{255,255,255,22});return;}
  if(sel){y-=18;}box(x+2,y+5,w,h,7,{0,0,0,60});if(sel||focused)box(x-3,y-3,w+6,h+6,9,focused?GOLD:Col{80,200,160});box(x,y,w,h,8,sel?Col{255,246,214}:skins[skin].card);
- line(x+7,y+7,x+w-8,y+h-8,{200,192,170,70});line(x+7,y+h-8,x+w-8,y+7,{200,192,170,45});
+ hline(x+8,y+h-4,w-16,{176,172,160,65});
  int r=Card{id}.rank(),s=Card{id}.suit();Col c=(s==1||s==2||r==17)?RED:INK;std::string suits[]={"♠","♥","♦","♣",""};
  int rs=w<46?12:w<62?15:w<82?19:24,ss=w<46?11:w<62?14:w<82?17:22;
  if(r>=16){int fs=w<62?16:w<82?20:26;text(r==17?"大":"小",x+4,y+3,fs,c);text("王",x+4,y+3+(w<62?18:24),fs,c);if(w>=62)text("★",x+w-28,y+h-42,24,c);if(w>=62)text("★",x+w-26,y+6,12,c);}
@@ -89,7 +101,8 @@ void loadAvatars(){
   std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
   int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
   if(!px){fprintf(stderr,"Avatar %s failed: %s\n",names[i],stbi_failure_reason());continue;}
-  SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA8888);
+  for(int yy=0;yy<h;yy++)for(int xx=0;xx<w;xx++){float dx=(xx-w/2.0f)/(w*.49f),dy=(yy-h/2.0f)/(h*.49f);if(dx*dx+dy*dy>1)px[(yy*w+xx)*4+3]=0;}
+  SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA32);
   if(sf){avTex[i]=SDL_CreateTextureFromSurface(ren,sf);SDL_SetTextureBlendMode(avTex[i],SDL_BLENDMODE_BLEND);SDL_FreeSurface(sf);}
   stbi_image_free(px);
  }
@@ -100,7 +113,7 @@ void loadBg(){
   std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
   int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
   if(!px){fprintf(stderr,"Bg %s failed: %s\n",names[i],stbi_failure_reason());continue;}
-  SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA8888);
+  SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA32);
   if(sf){bgTex[i]=SDL_CreateTextureFromSurface(ren,sf);SDL_FreeSurface(sf);}
   stbi_image_free(px);
  }
@@ -128,13 +141,13 @@ void drawAvatar(int p,int x,int y,int r,bool active,bool passed,bool finished){
  else face(x,y,int(r*pulse),p);
  if(passed){circle(x,y,int(r*0.92),{10,30,24,150});text("过",x,y-9,22,MUTED,true);}
  if(finished){for(int i=-2;i<=2;i++){rect(x+i*8-5,y-r-10,10,7,{255,255,255});line(x+i*8,y-r-10,x+i*8-5,y-r-17,GOLD);line(x+i*8,y-r-10,x+i*8+5,y-r-17,GOLD);}text("已出完",x,y+r+16,15,CREAM,true);}
- else text(playerName(p),x,y+r+12,17,CREAM,true);
+ else if(p!=0)text(playerName(p),x,y+r+12,17,CREAM,true);
 }
 // ---------------- FX ----------------
 void addFx(int type,int sx,int sy,int dx,int dy,std::vector<int> cards,std::string t=""){Fx f{type,SDL_GetTicks(),type==FX_PLAY?320:(type==FX_BOMB?620:(type==FX_EMOTE?2800:(type==FX_WIN?2200:800))),sx,sy,dx,dy,std::move(cards),t};fxList.push_back(f);if(fxList.size()>14)fxList.erase(fxList.begin());}
 void drawFx(Uint32 now){
  for(auto&f:fxList){float t=(now-f.t0)/float(f.dur);if(t>=1)continue;t=std::max(0.0f,t);
-  if(f.type==FX_PLAY){float e=1.0f-std::pow(1.0f-t,3.0f);int n=f.cards.size();for(int i=0;i<n;i++){float ti=std::max(0.0f,std::min(1.0f,t*1.4f-i*0.04f));float ei=1.0f-std::pow(1.0f-ti,3.0f);int x=f.sx+(f.dx-f.sx)*ei,y=f.sy+(f.dy-f.sy)*ei;cardFace(f.cards[i],x,y,48,69,false,false);}}
+  if(f.type==FX_PLAY){int n=f.cards.size();for(int i=0;i<n;i++){float ti=std::max(0.0f,std::min(1.0f,t*1.4f-i*0.04f));float ei=1.0f-std::pow(1.0f-ti,3.0f);int x=f.sx+(f.dx-f.sx)*ei,y=f.sy+(f.dy-f.sy)*ei;cardFace(f.cards[i],x,y,48,69,false,false);}}
   if(f.type==FX_BOMB){int cx=f.dx,cy=f.dy;float r=24+130*t;ring(cx,cy,int(r),int(3*(1-t)+1),{GOLD.r,GOLD.g,GOLD.b,Uint8(230*(1-t))});ring(cx,cy,int(r*0.62),int(3*(1-t)+1),{255,190,80,Uint8(200*(1-t))});
    for(int i=0;i<16;i++){float a=i*0.3927f;float rr=50+150*t;int px=cx+int(rr*std::cos(a)),py=cy+int(rr*std::sin(a));rect(px-3,py-3,6,6,{GOLD.r,GOLD.g,GOLD.b,Uint8(255*(1-t))});}
    text("炸 弹",cx,cy-int(30*(1-t))-22,38,{255,255,255,Uint8(255*(1-t))},true);}
@@ -144,36 +157,46 @@ void drawFx(Uint32 now){
  }}
 void clearFx(Uint32 now){fxList.erase(std::remove_if(fxList.begin(),fxList.end(),[&](Fx&f){return now-f.t0>Uint32(f.dur);}),fxList.end());}
 // ---------------- screens ----------------
+// The lobby is drawn natively so labels remain crisp on handheld and TV output.
 void bgHome(){
- if(bgTex[0]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[0],nullptr,&dst);rect(0,0,W,H,{6,16,12,70});}
- else vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
- for(int i=0;i<30;i++){int x=(i*137+37)%W,y=(i*73+21)%H;circle(x,y,1+((i*7)%2),{210,188,130,50});}
- int mx=1130,my=180;if(avTex[2]){SDL_Rect dst{mx-64,my-64,128,128};SDL_RenderCopy(ren,avTex[2],nullptr,&dst);}else face(mx,my,64,2);
- for(int i=0;i<3;i++)cardFace((i*2+10)*4+i,mx-30+i*20,my+70,40,58,false,false);
- for(int i=0;i<6;i++){int x=940+i*42;line(x,52,x+150,398,{123,157,136,20});}
- text("GUANDAN  /  OFFLINE CLUB",66,44,16,GOLD);
+ vgrad(0,0,W,H,{39,63,125},{14,19,53});
+ for(int i=0;i<9;i++){int y=130+i*58;line(0,y,1280,y-180,{137,174,255,13});}
+ for(int i=0;i<36;i++){int x=(i*167+39)%W,y=(i*79+100)%H;circle(x,y,i%5==0?2:1,{186,207,255,60});}
+ circle(80,450,190,{88,111,202,15});circle(1190,40,220,{133,103,229,16});
+ rect(0,0,W,92,{9,15,43,140});hline(60,91,1128,{156,181,255,45});
 }
 void bgTable(){
- if(bgTex[1]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);rect(0,0,W,H,{6,16,12,58});}
+ if(bgTex[1]&&skin==0){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,bgTex[1],nullptr,&dst);rect(0,0,W,H,{6,16,12,58});}
  else vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
- for(int r=420;r>40;r-=38){circle(W/2,290,r,{255,255,255,Uint8(4)});}
+ for(int yy=145;yy<444;yy++){double q=(yy-294)/150.0;int half=int(485*std::sqrt(std::max(0.0,1-q*q)));hline(640-half,yy,half*2,{70,153,134,22});}
+ arc(640,294,154,2,0,6.2832,{185,213,213,18});
  for(int i=0;i<24;i++){int x=(i*139+37)%W,y=(i*73+21)%H;circle(x,y,1,{210,188,130,40});}
  boxOutline(10,74,W-20,H-96,18,{0,0,0,50});
 }
 void button(int x,int y,int w,const std::string&label,bool active=false,bool enabled=true){box(x,y,w,48,14,active?GOLD:Col{255,255,255,enabled?Uint8(18):Uint8(7)});text(label,x+w/2,y+9,20,active?INK:enabled?CREAM:MUTED,true);}
-void homeButtons(){button(74,605,220,hasSave?"继续上次对局":"暂无进行中对局",focus==4,hasSave);button(310,605,180,"本地战绩",focus==5);button(506,605,180,"偏好设置",focus==6);button(702,605,180,"玩法说明",focus==7);}
+void homeButtons(){const char* labels[]={"继续上次对局","本地战绩","偏好设置","玩法说明"};for(int i=0;i<4;i++){auto a=navAreas[i];button(a.x,a.y,a.w,i==0&&!hasSave?"暂无进行中对局":labels[i],focus==i+4,i!=0||hasSave);}text("方向键 选择   A 进入   − 规则",60,682,15,{163,183,225});text("离线单机 · 无需联网",1004,682,15,{163,183,225},false);}
 void home(){
- bgHome();
- text("掼蛋时光",86,92,72,{GOLD.r,GOLD.g,GOLD.b,255});
- text("掼蛋时光",89,95,72,{10,30,22,160});
- text("好牌，好搭档。随时开一桌。",90,196,25,MUTED);
- box(90,244,432,36,12,{255,255,255,14});text("双副牌  ·  离线 AI  ·  手柄 / 触屏",107,249,17,GOLD);
- const char*titles[]={"快速开局","经典升级","明牌练习","定局挑战"};const char*desc[]={"一局尽兴  /  随机发牌","从 2 打到 A  /  自动进贡还贡","看清四家  /  拆牌与配合练习","固定种子  /  重试同一副牌"};const char*tag[]={"QUICK PLAY","CLASSIC MATCH","OPEN HANDS","SEED CHALLENGE"};
- for(int i=0;i<4;i++){int x=74+(i%2)*566,y=306+(i/2)*137;bool f=focus==i;if(f)box(x-3,y-3,546,122,22,GOLD);box(x,y,540,116,20,f?skins[skin].btnHover:Col{16,52,38,235});text("0"+std::to_string(i+1),x+24,y+15,17,GOLD);text(tag[i],x+66,y+16,14,MUTED);text(titles[i],x+24,y+38,29,CREAM);text(desc[i],x+24,y+80,17,MUTED);text("›",x+492,y+30,38,GOLD);}
+ bgHome();circle(82,46,23,GOLD);text("掼",82,28,26,{32,43,82},true);text("掼蛋时光",120,23,31,WHITE);
+ box(302,30,106,30,15,{115,150,255,30});text("离线俱乐部",355,35,15,{188,211,255},true);
+ text("累计对局  "+std::to_string(total),824,34,18,CREAM);text("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,34,18,GOLD);
+ text("好牌好搭档，随时开一桌",60,120,30,WHITE);text("四人组队 / 双副牌 / 逢人配",1040,134,17,{174,196,240},true);
+ box(60,206,374,348,24,{13,27,66,180});box(80,226,105,28,14,{246,198,74,28});text("今日牌友",132,230,15,GOLD,true);
+ if(avTex[0]){SDL_Rect d{160,258,174,174};SDL_RenderCopy(ren,avTex[0],nullptr,&d);}else face(247,340,74,0);
+ ring(247,345,91,2,{169,194,251,80});text("好配合，就是好手气",247,450,26,WHITE,true);text("经典升级 · 默契搭档 · 从 2 打到 A",247,494,17,{171,194,235},true);
+ const char* titles[]={"快速开局","经典升级","明牌练习","定局挑战"};const char* tags[]={"QUICK PLAY","CLASSIC MATCH","OPEN HANDS","CHALLENGE"};
+ const char* desc[]={"随机发牌，一局尽兴","从 2 打到 A，进贡还贡","看清四家 · 练习配合","固定发牌 · 反复推演"};
+ Col tops[4]={{77,130,221},{110,93,189},{48,118,160},{111,80,156}};Col bots[4]={{40,70,148},{63,46,126},{28,67,105},{59,40,100}};
+ for(int i=0;i<4;i++){auto a=modeAreas[i];bool f=focus==i;box(a.x+3,a.y+6,a.w,a.h,20,{4,9,35,90});box(a.x-2,a.y-2,a.w+4,a.h+4,22,f?GOLD:Col{146,174,249,80});
+  roundedGradient(a.x,a.y,a.w,a.h,20,tops[i],bots[i]);
+  text(tags[i],a.x+24,a.y+16,13,{217,227,255});text(titles[i],a.x+24,a.y+(i<2?48:38),i<2?34:27,WHITE);text(desc[i],a.x+24,a.y+(i<2?99:80),17,{217,227,255});
+  if(i<2){for(int j=0;j<3;j++)cardFace((i==0?36:40)+j,a.x+211+j*27,a.y+107-j*8,48,69,false,false);box(a.x+24,a.y+148,122,36,18,f?GOLD:Col{255,255,255,32});text(i==0?"即刻开桌  ›":"开始升级  ›",a.x+85,a.y+155,17,f?INK:WHITE,true);}
+  else text("›",a.x+a.w-35,a.y+40,32,GOLD);
+ }
+ text("选择玩法后，可调整 AI 难度、节奏和倒计时",460,572,16,{174,196,240});
 }
 void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+74,14,GOLD,true);}
 void counterPanel(){
- if(!recorder||game.over)return;
+ if(!recorder||game.over||game.mode==2)return;
  box(16,74,306,124,12,{0,0,0,62});text("记牌器",28,80,15,GOLD);
  const char*lab[]={"2","3","4","5","6","7","8","9","10","J","Q","K","A","小王","大王"};int rr[]={2,3,4,5,6,7,8,9,10,11,12,13,14,16,17};
  for(int i=0;i<15;i++){int col=i%8,row=i/8;int x=26+col*37,y=102+row*37;box(x,y,34,32,6,{255,255,255,10});text(lab[i],x+4,y+1,14,CREAM);int n=game.remaining(rr[i]);text(std::to_string(n),x+22,y+12,17,n==0?RED:GOLD);}
@@ -184,93 +207,115 @@ void table(){
  text("掼蛋时光",26,14,24,GOLD);
  const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};text(modes[game.mode],176,21,17,CREAM);text("第 "+std::to_string(game.round)+" 局",330,21,17,MUTED);
  box(566,11,160,40,13,{255,255,255,14});text("本局打 "+rankName(game.level),646,17,26,GOLD,true);
- text("我方 "+rankName(game.levels[0])+"   :   对方 "+rankName(game.levels[1]),880,22,18,CREAM);text("+ 暂停",1174,22,15,MUTED);
+ text("我方 "+rankName(game.levels[0])+"   :   对方 "+rankName(game.levels[1]),880,22,18,CREAM);text("+ 暂停",1174,22,15,MUTED);box(1040,14,114,34,10,{255,255,255,16});text("ZL 记录",1097,20,17,CREAM,true);
  counterPanel();
  Uint32 now=SDL_GetTicks();
- auto fin=[&](int p){return std::find(game.finish.begin(),game.finish.end(),p)!=game.finish.end();};
- drawAvatar(2,640,game.mode==2?106:118,26,game.turn==2&&!game.over,game.passed[2],fin(2));
- text(std::to_string(game.hands[2].size())+" 张",706,104,18,GOLD);
- drawAvatar(1,96,game.mode==2?372:300,26,game.turn==1&&!game.over,game.passed[1],fin(1));
- text(std::to_string(game.hands[1].size())+" 张",96,344,18,GOLD,true);
- drawAvatar(3,1184,game.mode==2?372:300,26,game.turn==3&&!game.over,game.passed[3],fin(3));
- text(std::to_string(game.hands[3].size())+" 张",1184,344,18,GOLD,true);
- if(game.mode==2){for(int p=1;p<4;p++){int x=p==1?26:p==3?1066:370,y=p==2?168:96;for(int i=0;i<int(game.hands[p].size());i++){int cols=p==2?13:6,col=i%cols,row=i/cols;cardFace(game.hands[p][i],x+col*28,y+row*50,35,49,false,false);}}}
+ auto fin=[&](int p){return game.hands[p].empty();};
+ drawAvatar(2,game.mode==2?320:640,game.mode==2?108:118,26,game.turn==2&&!game.over,game.passed[2],fin(2));
+ text(std::to_string(game.hands[2].size())+" 张",game.mode==2?300:706,game.mode==2?166:104,18,GOLD);
+ drawAvatar(1,96,game.mode==2?372:300,game.mode==2?26:36,game.turn==1&&!game.over,game.passed[1],fin(1));
+ text(std::to_string(game.hands[1].size())+" 张",96,game.mode==2?434:380,18,GOLD,true);
+ drawAvatar(3,1184,game.mode==2?372:300,game.mode==2?26:36,game.turn==3&&!game.over,game.passed[3],fin(3));
+ text(std::to_string(game.hands[3].size())+" 张",1184,game.mode==2?434:380,18,GOLD,true);
+ if(game.mode==2){for(int p=1;p<4;p++){int x=p==1?26:p==3?1066:365,y=p==2?88:96;for(int i=0;i<int(game.hands[p].size());i++){int cols=p==2?27:6,col=i%cols,row=i/cols;cardFace(game.hands[p][i],x+col*(p==2?20:28),y+row*50,35,49,false,false);}}}
  else for(int p:{1,3}){int x=p==1?60:1160;for(int i=0;i<5;i++){int xx=x+i*5;box(xx,206+i*3,34,52,5,{40,80,64});line(xx+8,216+i*3,xx+26,248+i*3,GOLD_BORDER);}}
  showMove(2,640,196);showMove(1,250,288);showMove(3,1030,288);showMove(0,640,330);
+ if(game.mode!=2){box(377,76,132,28,14,{80,163,220,55});text("对家：小满",443,80,15,{164,218,255},true);}
  if(game.table.kind==NONE)text("自 由 领 出",640,262,22,{207,221,204,150},true);
  text("掼蛋时光",640,296,26,{246,198,74,18},true);
- if(!game.over){std::string st=game.turn==0?(autoplay?"正在托管 · 自动出牌":"轮到你出牌"):playerName(game.turn)+" 正在思考";text(st,640,448,22,game.turn==0?GOLD:MUTED,true);if(game.turn!=0){for(int i=0;i<3;i++)circle(640-30+i*30,470,3,i==int(now/350)%3?GOLD:Col{70,108,99});}}
- drawAvatar(0,74,452,24,game.turn==0&&!game.over&&!autoplay,game.passed[0],fin(0));
- text("你 · "+std::to_string(game.hands[0].size())+" 张",104,442,17,CREAM);
- if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0){float el=float(now-lastAI)/float(TURN_MS);if(el<1){arc(74,452,29,4,-1.57f,-1.57f+6.2832f*el,GOLD);text(std::to_string(std::max(0,int((TURN_MS-(now-lastAI))/1000))),74,443,17,GOLD,true);}}
+ if(!game.over){std::string st=game.turn==0?(autoplay?"正在托管 · 自动出牌":"轮到你出牌"):playerName(game.turn)+" 正在思考";text(st,640,424,21,game.turn==0?GOLD:MUTED,true);if(game.turn!=0){for(int i=0;i<3;i++)circle(640-30+i*30,457,3,i==int(now/350)%3?GOLD:Col{70,108,99});}}
+ drawAvatar(0,260,452,30,game.turn==0&&!game.over&&!autoplay,game.passed[0],fin(0));
+ text("你 · "+std::to_string(game.hands[0].size())+" 张",296,442,17,CREAM);
+ if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0){float el=float(now-lastAI)/float(TURN_MS);if(el<1){arc(197,452,23,4,-1.57f,-1.57f+6.2832f*el,GOLD);text(std::to_string(std::max(0,int((TURN_MS-(now-lastAI))/1000))),197,443,17,GOLD,true);}}
+ auto chosen=selection();Move preview=identify(chosen,game.level,game.table);if(!chosen.empty()){std::string label="已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"无法出牌":std::string(kindName(preview.kind)));text(label,640,478,17,preview.kind==NONE?Col{255,151,151}:GOLD,true);}
+ for(int p=1;p<4;p++)if(!fin(p)&&game.hands[p].size()<=5)text("余 "+std::to_string(game.hands[p].size())+" 张！",p==1?96:p==2?790:1184,p==2?166:(game.mode==2?458:374),18,{255,180,106},true);
  int n=game.hands[0].size();int step=std::min(58,1138/std::max(1,n-1)),x=(W-(step*std::max(0,n-1)+66))/2;
  for(int i=0;i<n;i++)cardFace(game.hands[0][i],x+i*step,513,66,104,selected[game.hands[0][i]],i==cursor&&game.turn==0&&!autoplay&&!game.over);
  if(game.mode==2)text("明牌练习 · 其余三家手牌可见",640,502,15,{207,221,204,130},true);
  drawFx(now);
  auto btn=[&](int bx,int by,int bw,const std::string&l,bool en,bool act){box(bx,by,bw,48,14,act?GOLD:en?Col{255,255,255,20}:Col{255,255,255,7});text(l,bx+bw/2,by+9,20,act?INK:en?CREAM:MUTED,true);};
- bool my=game.turn==0&&!game.over;
- btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my,true);btn(700,630,120,"R 理牌",my,false);btn(830,630,150,"ZR 托管",true,autoplay);btn(990,630,120,"表情",true,false);
- text("← → 移动   A 选牌   B 清选   R 理牌",24,693,14,MUTED);text(autoplay?"ZR 取消托管":"ZR 托管",1020,641,16,autoplay?GOLD:MUTED);text("− 规则   ZL 记录",1096,693,14,MUTED);
+ bool my=game.turn==0&&!game.over&&!autoplay;
+ btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my&&preview.kind!=NONE,my&&preview.kind!=NONE);btn(700,630,120,"R 理牌",my,false);btn(830,630,150,autoplay?"ZR 接管":"ZR 托管",!game.over,!game.over&&autoplay);btn(990,630,120,"表情",true,false);
+ text("← → 移动   A 选牌   B 清选   R 理牌",24,693,14,MUTED);text("− 规则   ZL 记录",1096,693,14,MUTED);
  recordResult();
- if(game.over){rect(0,66,W,H-66,{2,10,16,180});box(380,150,520,340,24,{24,58,46});text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
+ if(game.over){rect(0,66,W,H-66,{2,10,16,180});box(380,150,520,340,24,{25,35,75});text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
   int teamUp=0;if(game.mode==1){int tf=game.finish[0]%2;int place=0;for(int i=1;i<4;i++)if(game.finish[i]%2==tf)place=i;teamUp=4-place;}
   for(int i=0;i<4;i++)text(std::to_string(i+1)+"  "+playerName(game.finish[i])+(game.finish[i]%2==0?"  ★":""),440+(i%2)*215,285+(i/2)*38,19,game.finish[i]%2==0?GOLD:MUTED);
-  text(game.champion?"成功过 A · 新赛季开启！":"本局升 "+std::to_string(teamUp)+" 级",640,396,18,{207,221,204},true);
-  text(game.champion?"A 开始新赛季    B 返回大厅    ZL 复盘":"A 下一局    B 返回大厅    ZL 复盘",640,440,21,CREAM,true);}
+  text(game.mode!=1?"单局结束 · 下一局重新发牌":game.champion?"成功过 A · 新赛季开启！":"获胜方升 "+std::to_string(teamUp)+" 级",640,396,18,{207,221,204},true);
+  button(395,428,165,game.champion?"A 新赛季":"A 下一局",true);button(580,428,135,"B 大厅");button(735,428,150,"ZL 复盘");}
  if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
 }
 void overlay(){
- if(!modal)return;rect(0,0,W,H,{2,10,16,205});box(210,84,860,548,24,{20,52,42});
+ if(!modal)return;
+ rect(0,0,W,H,{2,10,16,205});box(207,81,866,554,26,{145,168,229,140});box(210,84,860,548,24,{25,35,75});text("B 返回",1004,112,17,MUTED,true);
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","偏好设置","玩法说明"};for(int i=0;i<4;i++)button(340,196+i*80,600,items[i],focus==i);}
- if(modal==2){text("偏好设置",254,116,34,GOLD);std::string labels[]={"AI 策略："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"牌桌主题："+std::string(skin==0?"翡翠绿":skin==1?"深海蓝":"午夜紫"),"AI 出牌速度："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"操作音效："+std::string(sound?"开启":"关闭"),"记牌器："+std::string(recorder?"开启":"关闭"),"出牌倒计时："+std::string(timerOn?"开启":"关闭")};for(int i=0;i<6;i++)button(315,180+i*70,650,labels[i],focus==i);text("A 切换选项   B 返回",640,574,17,MUTED,true);}
- if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","← → 移动光标，A 选牌，X 出牌，B 清选，Y 提示，R 理牌。","L 不出，ZR 托管，ZL 出牌记录，+ 暂停，− 本页。","掌机支持点按选牌和按钮；倒计时结束自动出牌。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
+ if(modal==2){text("偏好设置",254,116,34,GOLD);std::string labels[]={"AI 策略："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"牌桌主题："+std::string(skin==0?"翡翠绿":skin==1?"深海蓝":"午夜紫"),"AI 出牌速度："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"操作音效："+std::string(sound?"开启":"关闭"),"记牌器："+std::string(recorder?"开启":"关闭"),"出牌倒计时："+std::string(timerOn?"开启":"关闭")};for(int i=0;i<6;i++)button(315,180+i*70,650,labels[i],focus==i);text("A 切换选项   B 返回",640,600,17,MUTED,true);}
+ if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","← → 移动光标，A 选牌，X 出牌，B 清选，Y 切换提示，R 理牌。","L 不出，ZR 托管，ZL 出牌记录，+ 暂停，− 本页。","掌机支持点按选牌和按钮；倒计时结束自动出牌。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
  if(modal==4){text("本地战绩",254,116,34,GOLD);std::string v[]={std::to_string(total),std::to_string(wins),total?std::to_string(wins*100/total)+"%":"—",std::to_string(bombs)};const char*l[]={"完成对局","我方获胜","本地胜率","打出炸弹"};for(int i=0;i<4;i++){int x=330+(i%2)*340,y=200+(i/2)*150;text(v[i],x,y,46,CREAM);text(l[i],x,y+63,20,MUTED);}text("B 返回   ·   数据仅保存在本机",640,570,17,MUTED,true);}
- if(modal==5){text("出牌记录",254,116,34,GOLD);int start=std::max(0,int(game.log.size())-10);for(int i=start;i<int(game.log.size());i++)text(game.log[i],254,180+(i-start)*36,19,i==int(game.log.size())-1?GOLD:CREAM);text("B 返回",940,568,17,MUTED);}
+ if(modal==5){text("出牌记录",254,116,34,GOLD);int pages=std::max(1,(int(game.history.size())+4)/5);historyPage=std::clamp(historyPage,0,pages-1);text("第 "+std::to_string(historyPage+1)+" / "+std::to_string(pages)+" 页",840,132,17,MUTED);
+  if(game.history.empty())text("尚无出牌记录 · 旧版本存档从恢复后开始记录",640,300,21,CREAM,true);
+  int end=int(game.history.size())-historyPage*5,start=std::max(0,end-5);for(int i=start;i<end;i++){auto&r=game.history[i];int y=178+(i-start)*72;box(248,y,784,65,10,{255,255,255,9});text(std::to_string(i+1),263,y+20,15,MUTED);text(playerName(r.player),310,y+17,20,r.player%2==0?GOLD:CREAM);text(r.move.kind==NONE?"不出":kindName(r.move.kind),390,y+21,16,MUTED);for(int j=0;j<int(r.move.cards.size());j++)cardFace(r.move.cards[j],500+j*46,y+5,40,54,false,false);}
+  button(290,562,250,"← 较早记录");button(740,562,250,"较新记录 →");}
+ if(modal==8){const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};text(modes[pendingMode],254,116,34,GOLD);text("开局设置",940,138,18,MUTED);std::string labels[]={"AI 难度："+std::string(game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶"),"出牌节奏："+std::string(speed==0?"舒缓":speed==1?"标准":"快速"),"18 秒倒计时："+std::string(timerOn?"开启":"关闭"),"开始对局  ›"};for(int i=0;i<4;i++)button(315,190+i*78,650,labels[i],focus==i);text(pendingMode==3?"同一副首局可重试，适合练习拆牌思路":"四人双副牌 · 对家组队 · 红桃级牌为逢人配",640,534,18,MUTED,true);text("↑ ↓ 选择   A 切换 / 开始   B 返回",640,574,17,MUTED,true);}
  if(modal==6){text("快捷表情",254,116,34,GOLD);const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};for(int i=0;i<8;i++){int col=i%2,row=i/2;button(330+col*330,196+row*84,300,em[i],focus==i);}text("方向键选择   A 发送   B 返回",640,562,17,MUTED,true);}
- if(modal==7){text("复盘报告",254,116,34,GOLD);int n=int(game.powerLog.size());int bombs=0,maxPow=0;for(int i=0;i<n;i++){if(game.bombLog[i])bombs++;maxPow=std::max(maxPow,game.powerLog[i]);}
+ if(modal==7){text("复盘报告",254,116,34,GOLD);text("牌力统计 · 非 AI 评估",650,132,17,MUTED);int n=int(game.powerLog.size());int bombs=0,maxPow=0;for(int i=0;i<n;i++){if(game.bombLog[i])bombs++;maxPow=std::max(maxPow,game.powerLog[i]);}
   int cx=252,cy=168,cw=776,ch=206;box(cx,cy,cw,ch,10,{0,0,0,78});text("本局共 "+std::to_string(n)+" 手 · 炸弹 "+std::to_string(bombs)+" 次 · 最大牌力 "+std::to_string(maxPow),278,180,18,GOLD);
-  const int grid[4]={100,75,50,25};for(int g=0;g<4;g++){int gy=cy+ch-26-(100-grid[g])*(ch-70)/100;hline(cx+10,gy,cx+cw-20,{255,255,255,26});text(std::to_string(grid[g]),cx-22,gy-7,14,MUTED);}
-  int px0=cx+16,py0=cy+ch-26,px1=cx+cw-16,py1=cy+26;
-  if(n>1){int lx=px0,ly=py0;for(int i=0;i<n;i++){int x=px0+(px1-px0)*i/(n-1);int sc=maxPow?std::min(100,int(double(game.powerLog[i])*100.0/double(maxPow))):0;int y=py0-sc*(py0-py1)/100;line(lx,ly,x,y,GOLD);circle(x,y,2,GOLD);lx=x;ly=y;}}
-  text("评分曲线 · 第 1 → 第 "+std::to_string(std::max(1,n))+" 手",px0,py0+8,14,MUTED);
+  const int grid[4]={100,75,50,25};for(int g=0;g<4;g++){int gy=cy+ch-26-grid[g]*(ch-70)/100;hline(cx+10,gy,cw-20,{255,255,255,26});text(std::to_string(grid[g]),cx-22,gy-7,14,MUTED);}
+  int px0=cx+16,py0=cy+ch-26,px1=cx+cw-16,py1=cy+44;
+  if(n>1){int lx=px0,ly=py0-(maxPow?int(double(game.powerLog[0])*100/maxPow):0)*(py0-py1)/100;for(int i=0;i<n;i++){int x=px0+(px1-px0)*i/(n-1);int sc=maxPow?std::min(100,int(double(game.powerLog[i])*100.0/double(maxPow))):0;int y=py0-sc*(py0-py1)/100;line(lx,ly,x,y,GOLD);circle(x,y,2,GOLD);lx=x;ly=y;}}
+  text("牌力曲线 · 第 1 → 第 "+std::to_string(std::max(1,n))+" 手",px0,py0+8,14,MUTED);
   int qx=cx,qy=py0+38,qw=cw,qh=H-qy-170;box(qx,qy,qw,qh,10,{0,0,0,78});text("局势图 · 四家手牌余量",278,qy+8,18,GOLD);
-  if(!game.snapshots.empty()){Col cols[4]={GOLD,Col{120,200,160},{150,120,220},{190,150,120}};const char*ps[4]={"你","队友","南风","青竹"};for(int p=0;p<4;p++){int lx=qx+16,ly=qy+qh-18-int(game.snapshots[0][p])*(qh-52)/27;for(int i=1;i<int(game.snapshots.size());i++){int x=qx+16+(qw-32)*i/(int(game.snapshots.size())-1);int y=qy+qh-18-int(game.snapshots[i][p])*(qh-52)/27;line(lx,ly,x,y,cols[p]);lx=x;ly=y;}text(ps[p],qx+qw-40,qy+qh-14-32*p,14,cols[p]);}}
+  if(!game.snapshots.empty()){Col cols[4]={GOLD,Col{120,200,160},{150,120,220},{190,150,120}};const char*ps[4]={"你","南风","小满","青竹"};for(int p=0;p<4;p++){int lx=qx+16,ly=qy+qh-18-int(game.snapshots[0][p])*(qh-52)/27;for(int i=1;i<int(game.snapshots.size());i++){int x=qx+16+(qw-112)*i/(int(game.snapshots.size())-1);int y=qy+qh-18-int(game.snapshots[i][p])*(qh-52)/27;line(lx,ly,x,y,cols[p]);lx=x;ly=y;}text(ps[p],qx+qw-40,qy+44+23*p,14,cols[p]);}}
   text("B 返回",940,568,17,MUTED);}
 }
 // ---------------- actions ----------------
 void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();cursor=std::min(cursor,int(game.hands[0].size())-1);lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
-void doHint(){if(game.turn!=0||game.over)return;clearSelection();Move m=game.hint(0);if(m.kind==NONE){message(game.last>=0&&game.last%2==0?"建议让队友继续领牌，可按 L 不出":"建议不出，可按 L");return;}for(int id:m.cards)selected[id]=true;message(std::string("建议：")+kindName(m.kind)+"，按 X 打出");}
-void doAutoMove(){Move m=game.hint(0);if(m.kind==NONE){if(game.table.kind==NONE){auto ms=moves(game.hands[0],game.level);if(!ms.empty())game.play(0,ms.front().cards);}else game.pass(0);}else game.play(0,m.cards);clearSelection();cursor=0;}
+void doHint(){if(game.turn!=0||game.over||autoplay)return;
+ if(hintIndex<0||hintAction!=game.history.size()||hintSeed!=game.seed||hintRound!=game.round){hintOptions=moves(game.hands[0],game.level,game.table);std::stable_sort(hintOptions.begin(),hintOptions.end(),[](const Move&a,const Move&b){if(a.explosive()!=b.explosive())return !a.explosive();if(a.cards.size()!=b.cards.size())return a.cards.size()>b.cards.size();return a.high<b.high;});Move recommended=game.hint(0);if(recommended.kind==NONE&&game.table.kind!=NONE)hintOptions.insert(hintOptions.begin(),recommended);else{auto it=std::find_if(hintOptions.begin(),hintOptions.end(),[&](const Move&m){auto a=m.cards,b=recommended.cards;std::sort(a.begin(),a.end());std::sort(b.begin(),b.end());return a==b;});if(it!=hintOptions.end())std::rotate(hintOptions.begin(),it,it+1);}hintAction=game.history.size();hintSeed=game.seed;hintRound=game.round;hintIndex=-1;}
+ clearSelection();if(hintOptions.empty()){message("没有可压过的牌，按 L 不出");return;}hintIndex=(hintIndex+1)%int(hintOptions.size());auto&m=hintOptions[hintIndex];for(int id:m.cards)selected[id]=true;message(std::to_string(hintIndex+1)+" / "+std::to_string(hintOptions.size())+" · "+(m.kind==NONE?std::string("建议不出，按 L 执行"):std::string(kindName(m.kind))+"，按 X 出牌")+" · Y 换一组");}
+void doAutoMove(){Move m=game.hint(0);if(m.kind==NONE){if(game.table.kind==NONE){auto ms=moves(game.hands[0],game.level);if(!ms.empty())game.play(0,ms.front().cards);}else game.pass(0);}else if(game.play(0,m.cards)&&m.explosive())bombs++;clearSelection();cursor=0;}
 enum Action{LEFT,RIGHT,UP,DOWN,CONFIRM,BACK,PLAY,HINT,PASS,SORT,AUTO,PAUSE,HELP,HISTORY,EMOTE};
 void act(Action a){
  if(modal){
-  if(a==BACK||a==PAUSE){modal=0;focus=0;sfx(2);return;}
-  int max=modal==1?4:modal==2?6:modal==6?8:1;
+  if(a==BACK||a==PAUSE){setModal(0);focus=0;sfx(2);return;}
+  int max=modal==1?4:modal==2?6:modal==6?8:modal==8?4:1;
+  if(modal==5){int pages=std::max(1,(int(game.history.size())+4)/5);if(a==LEFT||a==UP)historyPage=std::min(pages-1,historyPage+1);if(a==RIGHT||a==DOWN)historyPage=std::max(0,historyPage-1);return;}
   if(modal==6){if(a==LEFT||a==UP)focus=(focus+7)%8;if(a==RIGHT||a==DOWN)focus=(focus+1)%8;}
   else{if(a==UP)focus=(focus+max-1)%max;if(a==DOWN)focus=(focus+1)%max;}
   if(a==CONFIRM){
-   if(modal==1){if(focus==0)modal=0;else if(focus==1){checkpoint();screen=0;modal=0;focus=4;}else if(focus==2){modal=2;focus=0;}else{modal=3;focus=0;}}
+   if(modal==1){if(focus==0)setModal(0);else if(focus==1){checkpoint();screen=0;setModal(0);focus=4;}else if(focus==2){setModal(2);focus=0;}else{setModal(3);focus=0;}}
    else if(modal==2){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)skin=(skin+1)%3;if(focus==2)speed=(speed+1)%3;if(focus==3)sound=!sound;if(focus==4)recorder=!recorder;if(focus==5)timerOn=!timerOn;saveStats();if(screen)checkpoint();sfx(0);}
-   else if(modal==6){const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};addFx(FX_EMOTE,0,0,300,540,{},em[focus]);sfx(0);modal=0;focus=0;}
+   else if(modal==8){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)speed=(speed+1)%3;if(focus==2)timerOn=!timerOn;saveStats();if(focus==3){setModal(0);start(pendingMode);}sfx(0);}
+   else if(modal==6){const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};addFx(FX_EMOTE,0,0,300,540,{},em[focus]);sfx(0);setModal(0);focus=0;}
   }
   return;
  }
- if(!screen){if(a==LEFT)focus=focus<4?(focus^1):4+(focus-4+3)%4;if(a==RIGHT)focus=focus<4?(focus^1):4+(focus-4+1)%4;if(a==UP)focus=focus<2?4+focus:focus<4?focus-2:2+(focus-4)/2;if(a==DOWN)focus=focus<2?focus+2:focus<4?4+(focus-2)*2:(focus-4)/2;if(a==PAUSE){quit=true;return;}if(a==HELP){modal=3;focus=0;return;}
-  if(a==CONFIRM){sfx(0);if(focus<4)start(focus);else if(focus==4){if(hasSave){Game g;if(g.load(base+"session.dat")){game=g;screen=1;autoplay=false;clearSelection();cursor=0;lastAI=SDL_GetTicks();statRound=game.over?game.round:-1;fxList.clear();lastShown={};lastPassed={};}else message("存档无法读取");}}else{modal=focus==5?4:focus==6?2:3;focus=0;}}return;}
- if(a==PAUSE){checkpoint();modal=1;focus=0;sfx(0);return;}if(a==HELP){modal=3;focus=0;return;}if(a==HISTORY){modal=game.over?7:5;focus=0;return;}if(a==EMOTE){if(game.over)return;modal=6;focus=0;return;}
- if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();statRound=-1;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
+ if(!screen){if(a==LEFT)focus=focus<4?(focus^1):4+(focus-4+3)%4;if(a==RIGHT)focus=focus<4?(focus^1):4+(focus-4+1)%4;if(a==UP)focus=focus<2?4+focus:focus<4?focus-2:2+(focus-4)/2;if(a==DOWN)focus=focus<2?focus+2:focus<4?4+(focus-2)*2:(focus-4)/2;if(a==PAUSE){quit=true;return;}if(a==HELP){setModal(3);focus=0;return;}
+  if(a==CONFIRM){sfx(0);if(focus<4){pendingMode=focus;setModal(8);focus=3;}else if(focus==4){if(hasSave){Game g;if(g.load(base+"session.dat")){game=g;screen=1;autoplay=false;clearSelection();cursor=0;lastAI=SDL_GetTicks();statRound=game.over?game.round:-1;resetHints();lastOver=game.over;fxList.clear();lastShown={};lastPassed={};}else message("存档无法读取");}}else{setModal(focus==5?4:focus==6?2:3);focus=0;}}return;}
+ if(a==PAUSE){checkpoint();setModal(1);focus=0;sfx(0);return;}if(a==HELP){setModal(3);focus=0;return;}if(a==HISTORY){setModal(game.over?7:5);historyPage=0;focus=0;return;}if(a==EMOTE){if(game.over)return;setModal(6);focus=0;return;}
+ if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();statRound=-1;resetHints();lastOver=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
  if(a==AUTO){autoplay=!autoplay;clearSelection();message(autoplay?"托管已开启，按 ZR 取消":"已取消托管");sfx(0);lastAI=SDL_GetTicks();return;}
  if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();clearSelection();cursor=0;message("已按点数理牌，级牌和王牌在右侧");sfx(0);}
 }
-void click(int x,int y){if(modal){if(modal==1&&x>340&&x<940&&y>=196&&y<516){focus=std::min(3,(y-196)/80);act(CONFIRM);}else if(modal==2&&x>315&&x<965&&y>=180&&y<600){focus=std::min(5,(y-180)/70);act(CONFIRM);}else if(modal==6&&y>=196&&y<532){int col=x<630?0:1;int row=(y-196)/84;if(row<4){focus=row*2+col;act(CONFIRM);}}else act(BACK);return;}
- if(!screen){for(int i=0;i<4;i++){int xx=74+(i%2)*566,yy=306+(i/2)*137;if(x>=xx&&x<xx+540&&y>=yy&&y<yy+116){focus=i;act(CONFIRM);return;}}if(y>605&&y<655){if(x>=74&&x<294)focus=4;else if(x>=310&&x<490)focus=5;else if(x>=506&&x<686)focus=6;else if(x>=702&&x<882)focus=7;else return;act(CONFIRM);}return;}
- if(game.over){act(CONFIRM);return;}if(x>1140&&y<66){act(PAUSE);return;}
+void click(int x,int y){
+ if(modal){
+  if(Area{945,99,100,48}.contains(x,y)){act(BACK);return;}
+  if(modal==5){if(Area{290,562,250,48}.contains(x,y))act(LEFT);else if(Area{740,562,250,48}.contains(x,y))act(RIGHT);return;}
+  int count=modal==1?4:modal==2?6:modal==8?4:modal==6?8:0;
+  for(int i=0;i<count;i++){
+   Area area=modal==1?Area{340,196+i*80,600,48}:modal==2?Area{315,180+i*70,650,48}:modal==8?Area{315,190+i*78,650,48}:Area{330+(i%2)*330,196+(i/2)*84,300,48};
+   if(area.contains(x,y)){focus=i;act(CONFIRM);return;}
+  }
+  return;
+ }
+ if(!screen){for(int i=0;i<4;i++){if(modeAreas[i].contains(x,y)){focus=i;act(CONFIRM);return;}}for(int i=0;i<4;i++)if(navAreas[i].contains(x,y)){focus=i+4;act(CONFIRM);return;}return;}
+ if(game.over){if(Area{380,426,185,60}.contains(x,y))act(CONFIRM);else if(Area{570,426,155,60}.contains(x,y))act(BACK);else if(Area{730,426,170,60}.contains(x,y))act(HISTORY);return;}if(Area{1040,14,114,34}.contains(x,y)){act(HISTORY);return;}if(x>1140&&y<66){act(PAUSE);return;}
  struct BtnGeom{int x,y,w;}bs[6]={{210,630,140},{360,630,140},{510,630,180},{700,630,120},{830,630,150},{990,630,120}};Action acts[6]={PASS,HINT,PLAY,SORT,AUTO,EMOTE};
  for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){act(acts[i]);return;}
  if(game.turn==0&&!autoplay){int n=game.hands[0].size(),step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);if(x>=xx+i*step&&x<xx+i*step+66&&y>=yy&&y<yy+104){cursor=i;act(CONFIRM);return;}}}
 }
 int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
- for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;}
+ for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
  romfsInit();base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
 #else
@@ -284,12 +329,12 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  loadAvatars();loadBg();
  SDL_AudioSpec spec{};spec.freq=48000;spec.format=AUDIO_S16SYS;spec.channels=1;spec.samples=1024;audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,nullptr,0);if(audioDevice)SDL_PauseAudioDevice(audioDevice,0);
  std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}
- if(captureGame||smoke){start(smoke?2:captureMode);if(captureOver)autoplay=true;}if(captureModal)modal=captureModal;Uint32 frame=0; while(!quit){
+ if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
 #ifdef __SWITCH__
  if(!appletMainLoop()){break;}padUpdate(&pad);u64 down=padGetButtonsDown(&pad);u64 held=padGetButtons(&pad);static Uint32 repeat=0;u64 dirs=HidNpadButton_Left|HidNpadButton_Right|HidNpadButton_Up|HidNpadButton_Down;if(down&HidNpadButton_StickLLeft)down|=HidNpadButton_Left;if(down&HidNpadButton_StickLRight)down|=HidNpadButton_Right;if(down&HidNpadButton_StickLUp)down|=HidNpadButton_Up;if(down&HidNpadButton_StickLDown)down|=HidNpadButton_Down;if(held&HidNpadButton_StickLLeft)held|=HidNpadButton_Left;if(held&HidNpadButton_StickLRight)held|=HidNpadButton_Right;if(held&HidNpadButton_StickLUp)held|=HidNpadButton_Up;if(held&HidNpadButton_StickLDown)held|=HidNpadButton_Down;if(down&dirs)repeat=SDL_GetTicks()+320;else if((held&dirs)&&SDL_GetTicks()>repeat){down|=held&dirs;repeat=SDL_GetTicks()+95;}
  struct Binding{u64 bit;Action a;};Binding bindings[]={{HidNpadButton_Left,LEFT},{HidNpadButton_Right,RIGHT},{HidNpadButton_Up,UP},{HidNpadButton_Down,DOWN},{HidNpadButton_A,CONFIRM},{HidNpadButton_B,BACK},{HidNpadButton_X,PLAY},{HidNpadButton_Y,HINT},{HidNpadButton_L,PASS},{HidNpadButton_R,SORT},{HidNpadButton_ZR,AUTO},{HidNpadButton_ZL,HISTORY},{HidNpadButton_Plus,PAUSE},{HidNpadButton_Minus,HELP}};for(auto b:bindings)if(down&b.bit)act(b.a);
 #endif
- SDL_Event e;while(SDL_PollEvent(&e)){if(e.type==SDL_QUIT)quit=true;if(e.type==SDL_KEYDOWN){switch(e.key.keysym.sym){case SDLK_LEFT:act(LEFT);break;case SDLK_RIGHT:act(RIGHT);break;case SDLK_UP:act(UP);break;case SDLK_DOWN:act(DOWN);break;case SDLK_SPACE:act(CONFIRM);break;case SDLK_RETURN:act(screen&&!game.over?PLAY:CONFIRM);break;case SDLK_ESCAPE:act(modal?BACK:PAUSE);break;case SDLK_BACKSPACE:act(BACK);break;case SDLK_h:act(HINT);break;case SDLK_p:act(PASS);break;case SDLK_r:act(SORT);break;case SDLK_t:act(AUTO);break;case SDLK_F1:act(HELP);break;case SDLK_l:act(HISTORY);break;case SDLK_e:act(EMOTE);break;}}
+ SDL_Event e;while(SDL_PollEvent(&e)){if(e.type==SDL_QUIT)quit=true;if(e.type==SDL_KEYDOWN){switch(e.key.keysym.sym){case SDLK_LEFT:act(LEFT);break;case SDLK_RIGHT:act(RIGHT);break;case SDLK_UP:act(UP);break;case SDLK_DOWN:act(DOWN);break;case SDLK_SPACE:act(CONFIRM);break;case SDLK_RETURN:act(screen&&!modal&&!game.over?PLAY:CONFIRM);break;case SDLK_ESCAPE:act(modal?BACK:PAUSE);break;case SDLK_BACKSPACE:act(BACK);break;case SDLK_h:act(HINT);break;case SDLK_p:act(PASS);break;case SDLK_r:act(SORT);break;case SDLK_t:act(AUTO);break;case SDLK_F1:act(HELP);break;case SDLK_l:act(HISTORY);break;case SDLK_e:act(EMOTE);break;}}
   if(e.type==SDL_MOUSEBUTTONDOWN&&e.button.which!=SDL_TOUCH_MOUSEID){float mx,my;SDL_RenderWindowToLogical(ren,e.button.x,e.button.y,&mx,&my);click(int(mx),int(my));}if(e.type==SDL_FINGERDOWN)click(int(e.tfinger.x*W),int(e.tfinger.y*H));}
  Uint32 now=SDL_GetTicks();
  if(screen&&!modal){
@@ -306,7 +351,7 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
   if(game.over&&!lastOver){addFx(FX_WIN,0,0,0,0,{});sfx(4);}
   lastOver=game.over;
  }
- if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;clearSelection();cursor=0;lastAI=now;if(m.explosive())sfx(3);else sfx(1);checkpoint();}
+ if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(capture&&captureOver?0:speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;clearSelection();cursor=0;lastAI=now;if(m.explosive())sfx(3);else sfx(1);checkpoint();}
  if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0&&!capture&&now-lastAI>TURN_MS){doAutoMove();sfx(5);message("时间到，已自动出牌");lastAI=now;checkpoint();}
  if(smoke){if(frame==1){act(HELP);act(BACK);act(HINT);act(PLAY);}if(frame==2){act(PAUSE);act(BACK);act(AUTO);}if(frame>20)quit=true;}
  if(reviewMode&&game.over&&!modal&&frame>10)modal=7;
@@ -315,7 +360,10 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  if((capture&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10&&!reviewMode)||(reviewMode&&game.over&&modal==7&&frame>18)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
  SDL_RenderPresent(ren);frame++;SDL_Delay(16);
  }
- if(screen){checkpoint();}saveStats();for(auto&kv:cache)SDL_DestroyTexture(kv.second.t);for(auto&kv:fonts)TTF_CloseFont(kv.second);if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyRenderer(ren);SDL_DestroyWindow(window);TTF_Quit();SDL_Quit();
+ if(screen){checkpoint();}saveStats();for(auto&kv:cache)SDL_DestroyTexture(kv.second.t);for(auto&kv:fonts)TTF_CloseFont(kv.second);for(auto t:avTex){if(t)SDL_DestroyTexture(t);}
+ for(auto t:bgTex){if(t)SDL_DestroyTexture(t);}
+ if(audioDevice){SDL_CloseAudioDevice(audioDevice);}
+ SDL_DestroyRenderer(ren);SDL_DestroyWindow(window);TTF_Quit();SDL_Quit();
 #ifdef __SWITCH__
  romfsExit();
 #endif

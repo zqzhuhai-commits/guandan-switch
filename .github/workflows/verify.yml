@@ -1,0 +1,27 @@
+name: Verify game and desktop UI
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+    paths: ['source/**', 'tests/**', 'tools/**', 'Makefile.desktop', '.github/workflows/verify.yml']
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL development libraries
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev pkg-config python3-pil
+      - name: Restore verified embedded font
+        run: python3 tools/restore_assets.py
+      - name: Rules and save compatibility
+        run: make -f Makefile.desktop test
+      - name: Build and exercise actual UI handlers
+        run: make -f Makefile.desktop guandan-desktop test-ui
+      - name: Render desktop previews
+        run: python3 tools/capture_previews.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-ui-previews
+          path: preview/*.png

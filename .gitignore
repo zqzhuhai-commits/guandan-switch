@@ -13,3 +13,6 @@
 /romfs/*.gz
 /switch/GuandanSwitch/*.nro
 /switch/GuandanSwitch/*.gz
+
+/release/*.zip
+/ui-test
