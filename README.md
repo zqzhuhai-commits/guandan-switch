@@ -2,7 +2,7 @@
 
 参考腾讯《大掼蛋》的休闲棋牌氛围，独立编写规则、AI 和界面；不含腾讯的程序、美术、角色、音频或账号服务。游戏完全离线，无内购、无联网、无真钱交易。
 
-[下载 v0.1 完整发行包](dist/GuandanSwitch-v0.1.zip) · [单独下载 NRO](switch/GuandanSwitch/GuandanSwitch.nro)
+[下载 v0.1 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.1.0/GuandanSwitch-v0.1.zip) · [单独下载 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.1.0/GuandanSwitch.nro)
 
 ![大厅预览](preview/home.png)
 
@@ -88,6 +88,8 @@
 ## 源码与构建
 
 仓库根目录包含规则引擎、SDL2 界面、测试、字体和 Makefile。发行 ZIP 中源码位于 `source-project`。
+
+为兼容上传接口，完整发行包保存在 `release/*.partNN`，各片的校验值在 `release/manifest.json`。克隆后先执行 `python3 tools/restore_assets.py`，自动校验并还原完整 ZIP、内置字体和 NRO；不需要联网下载字体。
 
 Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make -j2`。
 

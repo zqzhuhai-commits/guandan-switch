@@ -1,0 +1,9 @@
+程序使用 libnx、SDL2、SDL2_ttf、FreeType、HarfBuzz、libpng、zlib、bzip2 及 Noto Sans CJK SC 字体。
+相关许可见 licenses 目录及 source-project/romfs/FONT-LICENSE.txt。
+GCC 的 libstdc++ / libgcc 运行库适用 GCC Runtime Library Exception：
+https://www.gnu.org/licenses/gcc-exception-3.1.html
+编译器与运行库源代码：https://github.com/devkitPro/buildscripts
+libnx：https://github.com/switchbrew/libnx
+SDL2：https://github.com/libsdl-org/SDL/tree/SDL2
+HarfBuzz：https://github.com/harfbuzz/harfbuzz
+Noto CJK：https://github.com/notofonts/noto-cjk

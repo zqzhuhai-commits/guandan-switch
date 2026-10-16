@@ -1,0 +1,12 @@
+CXX ?= g++
+CXXFLAGS += -std=c++17 -O2 -Wall
+SDL_CFLAGS := $(shell pkg-config --cflags sdl2 SDL2_ttf)
+SDL_LIBS := $(shell pkg-config --libs sdl2 SDL2_ttf)
+guandan-desktop: source/main.cpp source/engine.hpp
+	$(CXX) $(CXXFLAGS) $(SDL_CFLAGS) source/main.cpp $(SDL_LIBS) -o $@
+.PHONY: test clean
+test:
+	$(CXX) -std=c++17 -O2 tests/rules.cpp -o rules-test
+	./rules-test
+clean:
+	rm -f guandan-desktop rules-test

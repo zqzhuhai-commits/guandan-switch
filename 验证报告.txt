@@ -1,0 +1,26 @@
+掼蛋时光 Switch v0.1 — 验证报告
+
+已完成：
+- devkitA64 15.2.0 / libnx / SDL2 原生 ARM64 编译，零编译警告。
+- 同源桌面 SDL2 程序启动、规则弹窗、提示出牌、暂停、托管和退出冒烟测试通过。
+- 大厅、牌桌、明牌练习、设置、规则页面实际渲染并人工检查。
+- 规则回归测试通过：
+PASS: recognition, wildcard, bomb hierarchy, illegal actions, lead transfer, save/load; 256 AI deals, 19644 actions
+
+- AddressSanitizer 与 UndefinedBehaviorSanitizer 检查通过。
+  环境不支持 LeakSanitizer 的线程枚举，因此设置 detect_leaks=0；未声称完成泄漏检测。
+- 二副牌全部点数、花色一致性，双配牌对子和十张炸弹与四王比较已覆盖。
+
+二进制结构：
+NRO0/ASET headers: PASS
+Icon JPEG / NACP / embedded RomFS bounds: PASS
+ARM64 ELF static PIE: PASS
+NRO bytes: 25382079
+SHA256: aa6a2cd6588f3bab1f0e49ef6047cd297e6c09831c85dae228d9ff4c3d43483c
+
+未完成：
+- 实体 Switch 启动和完整游玩验证。
+- 真机触屏、音频、休眠恢复与电视输出性能测试。
+- 职业强度 AI 评估。
+
+preview 图片来自同源程序的桌面渲染，不是真机截图。

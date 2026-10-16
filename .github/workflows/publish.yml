@@ -1,0 +1,36 @@
+name: Verify and publish Switch v0.1
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release/**'
+      - 'tools/restore_assets.py'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore and checksum the exact tested assets
+        run: python3 tools/restore_assets.py
+      - name: Run rules and 256 automatic deals
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra tests/rules.cpp -o /tmp/guandan-rules
+          /tmp/guandan-rules
+      - name: Verify NRO checksum
+        run: |
+          echo 'aa6a2cd6588f3bab1f0e49ef6047cd297e6c09831c85dae228d9ff4c3d43483c  switch/GuandanSwitch/GuandanSwitch.nro' | sha256sum -c -
+      - name: Publish tested v0.1 binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp switch/GuandanSwitch/GuandanSwitch.nro dist/GuandanSwitch.nro
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            echo 'Release v0.1.0 already exists; leaving existing assets intact.'
+          else
+            gh release create v0.1.0 dist/GuandanSwitch-v0.1.zip dist/GuandanSwitch.nro --target "$GITHUB_SHA" --title '掼蛋时光 Switch v0.1 测试版' --notes-file release/notes.md --prerelease
+          fi

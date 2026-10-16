@@ -1,0 +1,15 @@
+/build/
+*.elf
+*.map
+*.nacp
+/GuandanSwitch.nro
+/guandan-desktop
+/guandan-linux
+/rules-test
+/session.dat*
+/profile.txt
+/dist/
+/romfs/font.otf
+/romfs/*.gz
+/switch/GuandanSwitch/*.nro
+/switch/GuandanSwitch/*.gz
