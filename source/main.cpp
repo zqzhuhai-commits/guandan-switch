@@ -39,13 +39,13 @@ static Skin skins[3]={ {{12,82,52},{3,32,20},{240,236,222},{26,30,36,235}},   //
                       {{16,48,92},{6,18,46},{238,240,246},{34,76,124}}, // 深海蓝
                       {{58,34,88},{24,14,42},{246,240,250},{84,54,118}}}; // 午夜紫
 static std::string base="./",fontPath;static int skin=0,speed=1;static bool sound=true,quit=false,autoplay=false,recorder=true,timerOn=true;
-static bool organized=true,smartGrouped=true,counterOpen=false;
+static bool organized=false,smartGrouped=false,counterOpen=false;
 static int suitFilter=-1,flushIndex=-1;
 static std::vector<int> layoutHand;
 static int layoutLevel=0,layoutRound=0;static bool layoutSmart=false;
 static bool gestureActive=false,gestureValue=false;static bool gestureVisited[108]{};
 void computeOrganizedGroups();void ensureGroups();void restoreHand();
-static AudioEngine audioEngine;static int musicVolume=40,sfxVolume=80;
+static AudioEngine audioEngine;static int musicVolume=40,sfxVolume=80,voiceVolume=80;
 static bool storageReady=false;static int storageErrno=0;static std::string storageError,storageOperation;
 static bool romfsReady=true;static Game game;static int screen=0,modal=0,focus=0,cursor=0;static bool selected[108]{};
 static Uint32 lastAI=0,toastUntil=0;static std::string toast;static int total=0,wins=0,bombs=0,statRound=-1;static bool hasSave=false;
@@ -62,6 +62,7 @@ void resetHints(){hintIndex=-1;hintOptions.clear();}
 enum FxType{FX_PLAY,FX_BOMB,FX_PASS,FX_EMOTE,FX_WIN};
 struct Fx{int type;Uint32 t0;int dur;int sx,sy,dx,dy;std::vector<int> cards;std::string text;};
 static std::vector<Fx> fxList;
+static Uint32 dealStarted=0,turnStarted=0;static int animatedTurn=-1;static bool captureStill=false;static bool waitSpoken=false;
 static bool lightPanel=false;
 struct LightPanelScope {bool previous=lightPanel;LightPanelScope(){lightPanel=true;}~LightPanelScope(){lightPanel=previous;}};
 
@@ -99,8 +100,8 @@ bool prepareStorage(){errno=0;storageReady=gd::ensureDirectory(base);if(!storage
 void sfx(int kind){if(sound&&audioEngine.device)audioEngine.effect(kind);}
 void beep(){sfx(0);}
 bool loadSession(Game&out){for(const auto&suffix:{"",".tmp",".bak"})if(out.load(base+"session.dat"+suffix)){if(*suffix)bootLog("Recovered session from "+std::string(suffix));return true;}return false;}
-void initAudio(){audioEngine.configure(sound,musicVolume,sfxVolume);std::string path=fontPath.rfind("romfs:",0)==0?"romfs:/music.wav":"romfs/music.wav";
- if(audioEngine.init(path)){bootLog("audio ready: driver="+audioEngine.driver+" PCM=48000 stereo"+(audioEngine.hasMusic()?" music loaded":" music unavailable: "+audioEngine.musicError));}
+void initAudio(){audioEngine.configure(sound,musicVolume,sfxVolume,voiceVolume);std::string path=fontPath.rfind("romfs:",0)==0?"romfs:/music.wav":"romfs/music.wav";
+ if(audioEngine.init(path)){bootLog("speech bank: "+std::string(audioEngine.hasSpeech()?"loaded":audioEngine.speechError));bootLog("audio ready: driver="+audioEngine.driver+" PCM=48000 stereo"+(audioEngine.hasMusic()?" music loaded":" music unavailable: "+audioEngine.musicError));}
  else bootLog("audio init failed (game continues): "+audioEngine.error);
 }
 void clearSelection(){std::fill(std::begin(selected),std::end(selected),false);}
@@ -109,14 +110,14 @@ void loadProfile(){
   std::ifstream f(base+"profile.txt"+suffix);int t,w,b,sk,sp,on,rec;
   if(!(f>>t>>w>>b>>sk>>sp>>on>>rec)||t<0||w<0||w>t||b<0||sk<0||sk>2||sp<0||sp>2||(on!=0&&on!=1)||(rec!=0&&rec!=1))continue;
   total=t;wins=w;bombs=b;skin=sk;speed=sp;sound=on!=0;recorder=rec!=0;
-  int diff=1,timer=1,music=40,fx=80;if(f>>diff)game.difficulty=std::clamp(diff,0,2);if(f>>timer)timerOn=timer!=0;if(f>>music)musicVolume=std::clamp(music,0,100);if(f>>fx)sfxVolume=std::clamp(fx,0,100);
+  int diff=1,timer=1,music=40,fx=80,voice=80;if(f>>diff)game.difficulty=std::clamp(diff,0,2);if(f>>timer)timerOn=timer!=0;if(f>>music)musicVolume=std::clamp(music,0,100);if(f>>fx)sfxVolume=std::clamp(fx,0,100);if(f>>voice)voiceVolume=std::clamp(voice,0,100);
   if(*suffix)bootLog("Recovered profile from backup");
   return;
  }
 }
 void saveStats(){
  if(!storageReady&&!prepareStorage())return;
- std::ostringstream f;f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn<<' '<<musicVolume<<' '<<sfxVolume<<'\n';
+ std::ostringstream f;f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn<<' '<<musicVolume<<' '<<sfxVolume<<' '<<voiceVolume<<'\n';
  errno=0;if(!gd::atomicTextFile(base+"profile.txt",f.str()))storageFailure("write profile",errno);
 }
 void checkpoint(){
@@ -125,7 +126,7 @@ void checkpoint(){
  else{hasSave=true;storageErrno=0;storageError.clear();storageOperation.clear();}
 }
 void recordResult(){if(game.over&&statRound!=game.round){statRound=game.round;total++;if(game.finish[0]%2==0)wins++;saveStats();}}
-void start(int mode,uint32_t seed=0){int diff=game.difficulty;game.newMatch(mode,seed?seed:mode==3?20261016u:uint32_t(std::time(nullptr)));game.difficulty=diff;screen=1;modal=0;autoplay=false;organized=true;smartGrouped=true;suitFilter=-1;layoutHand.clear();cursor=0;clearSelection();statRound=-1;resetHints();lastOver=false;lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};checkpoint();sfx(6);}
+void start(int mode,uint32_t seed=0){int diff=game.difficulty;game.newMatch(mode,seed?seed:mode==3?20261016u:uint32_t(std::time(nullptr)));game.difficulty=diff;screen=1;modal=0;autoplay=false;organized=false;smartGrouped=false;suitFilter=-1;layoutHand.clear();cursor=0;clearSelection();statRound=-1;resetHints();lastOver=false;lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};dealStarted=SDL_GetTicks();animatedTurn=-1;checkpoint();sfx(6);audioEngine.say(speech::START);waitSpoken=false;}
 
 // ---------------- cards ----------------
 void cardFace(int id,int x,int y,int w,int h,bool sel,bool focused,bool up=true){
@@ -200,10 +201,10 @@ void drawAvatar(int p,int x,int y,int r,bool active,bool passed,bool finished){
  else if(p!=0)text(playerName(p),x,y+r+12,17,CREAM,true);
 }
 // ---------------- FX ----------------
-void addFx(int type,int sx,int sy,int dx,int dy,std::vector<int> cards,std::string t=""){Fx f{type,SDL_GetTicks(),type==FX_PLAY?320:(type==FX_BOMB?620:(type==FX_EMOTE?2800:(type==FX_WIN?2200:800))),sx,sy,dx,dy,std::move(cards),t};fxList.push_back(f);if(fxList.size()>14)fxList.erase(fxList.begin());}
+void addFx(int type,int sx,int sy,int dx,int dy,std::vector<int> cards,std::string t=""){Fx f{type,SDL_GetTicks(),type==FX_PLAY?460:(type==FX_BOMB?950:(type==FX_EMOTE?2800:(type==FX_WIN?2200:800))),sx,sy,dx,dy,std::move(cards),t};fxList.push_back(f);if(fxList.size()>14)fxList.erase(fxList.begin());}
 void drawFx(Uint32 now){
  for(auto&f:fxList){float t=(now-f.t0)/float(f.dur);if(t>=1)continue;t=std::max(0.0f,t);
-  if(f.type==FX_PLAY){int n=f.cards.size();for(int i=0;i<n;i++){float ti=std::max(0.0f,std::min(1.0f,t*1.4f-i*0.04f));float ei=1.0f-std::pow(1.0f-ti,3.0f);int x=f.sx+(f.dx-f.sx)*ei,y=f.sy+(f.dy-f.sy)*ei;cardFace(f.cards[i],x,y,48,69,false,false);}}
+  if(f.type==FX_PLAY){int n=f.cards.size();for(int i=0;i<n;i++){float ti=std::max(0.0f,std::min(1.0f,t*1.4f-i*0.04f));float ei=1.0f-std::pow(1.0f-ti,3.0f);int step=std::min(34,230/std::max(1,n));int x=f.sx+(f.dx-f.sx)*ei+i*step,y=f.sy+(f.dy-f.sy)*ei-int(24*std::sin(ti*3.14159f));cardFace(f.cards[i],x,y,48,69,false,false);}}
   if(f.type==FX_BOMB){int cx=f.dx,cy=f.dy;float r=24+130*t;ring(cx,cy,int(r),int(3*(1-t)+1),{GOLD.r,GOLD.g,GOLD.b,Uint8(230*(1-t))});ring(cx,cy,int(r*0.62),int(3*(1-t)+1),{255,190,80,Uint8(200*(1-t))});
    for(int i=0;i<16;i++){float a=i*0.3927f;float rr=50+150*t;int px=cx+int(rr*std::cos(a)),py=cy+int(rr*std::sin(a));rect(px-3,py-3,6,6,{GOLD.r,GOLD.g,GOLD.b,Uint8(255*(1-t))});}
    text("炸 弹",cx,cy-int(30*(1-t))-22,38,{255,255,255,Uint8(255*(1-t))},true);}
@@ -244,11 +245,11 @@ void button(int x,int y,int w,const std::string&label,bool active=false,bool ena
  box(x,y,w,48,14,active?GOLD:Col{255,255,255,enabled?Uint8(18):Uint8(7)});text(label,x+w/2,y+9,20,active?INK:enabled?CREAM:MUTED,true);
 }
 void choiceRow(int x,int y,int w,const std::string&label,const std::string&value,bool active){
- box(x-2,y-2,w+4,52,14,active?Col{225,176,66}:Col{211,221,242});box(x,y,w,48,12,{255,255,255});
- if(active){box(x+1,y+9,4,30,2,{231,180,59});}
+ box(x-2,y-2,w+4,44,14,active?Col{225,176,66}:Col{211,221,242});box(x,y,w,42,12,{255,255,255});
+ if(active){box(x+1,y+7,4,28,2,{231,180,59});}
  text(label,x+24,y+10,20,CREAM);
- box(x+w-254,y+5,244,38,10,active?Col{255,237,184}:Col{237,242,254});
- if(value=="开启"||value=="关闭"){text(value,x+w-220,y+11,18,CREAM);bool on=value=="开启";box(x+w-90,y+12,60,26,13,on?Col{97,136,224}:Col{185,195,214});circle(x+w-(on?43:77),y+25,10,WHITE);}
+ box(x+w-254,y+5,244,32,10,active?Col{255,237,184}:Col{237,242,254});
+ if(value=="开启"||value=="关闭"){text(value,x+w-220,y+11,18,CREAM);bool on=value=="开启";box(x+w-90,y+9,60,26,13,on?Col{97,136,224}:Col{185,195,214});circle(x+w-(on?43:77),y+22,10,WHITE);}
  else{text(value,x+w-140,y+11,18,CREAM,true);text("›",x+w-32,y+7,22,MUTED,true);}
 }
 // Outlined floating labels stay legible over the scene without header/footer panels.
@@ -268,8 +269,6 @@ void navIcon(int type,int x,int y,Col c){
 void homeButtons(){
  const char*labels[]={"继续上次对局","本地战绩","偏好设置","玩法说明"};
  for(int i=0;i<4;i++){auto a=navAreas[i];bool active=!modal&&focus==i+4,enabled=i!=0||hasSave;Col c=active?GOLD:enabled?WHITE:Col{209,218,228};
-  box(a.x+28,a.y-1,a.w-56,72,18,active?GOLD:Col{207,224,255,65});
-  box(a.x+29,a.y,a.w-58,70,17,active?Col{29,58,97,200}:Col{9,27,53,135});
   navIcon(i,a.x+a.w/2,a.y+15,c);floatingText(i==0&&!hasSave?"暂无进行中对局":labels[i],a.x+a.w/2,a.y+35,20,c,true);
   if(active){hline(a.x+a.w/2-58,a.y+65,116,GOLD);hline(a.x+a.w/2-58,a.y+66,116,GOLD);}
  }
@@ -293,7 +292,7 @@ void home(){
  }
  floatingText("选择玩法后，可调整 AI 难度、节奏和倒计时",478,565,15);
 }
-void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+71,12,WHITE,true);}
+void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;for(const auto&f:fxList)if(f.type==FX_PLAY&&f.cards==m.cards&&SDL_GetTicks()-f.t0<Uint32(f.dur))return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+71,12,WHITE,true);}
 void counterPanel(){
  if(!recorder||game.over||game.mode==2)return;
  box(16,74,306,124,12,{0,0,0,62});text("记牌器",28,80,15,GOLD);
@@ -303,6 +302,8 @@ void counterPanel(){
 #include "table_ui.hpp"
 void table(){
  referenceScene();Uint32 now=SDL_GetTicks();ensureGroups();
+ if(animatedTurn!=game.turn){animatedTurn=game.turn;turnStarted=now;waitSpoken=false;}
+ if(!game.over&&!captureStill){int tx=game.turn==0?403:game.turn==1?158:game.turn==2?536:1125,ty=game.turn==0?289:game.turn==2?87:227;float pulse=(1+std::sin((now-turnStarted)*.006f))*.5f;ring(tx,ty,27+int(pulse*4),2,{255,222,128,Uint8(80+100*pulse)});}
  box(20,14,155,42,8,{255,250,226,245});text("本局打",33,21,22,{151,103,39});text(rankName(game.level),145,16,32,{157,77,26},true);
  int bombCount=0;for(const auto&r:game.history)if(r.move.explosive())bombCount++;
  box(185,14,146,42,8,{22,51,92,170});text("炸弹倍数",199,24,16,WHITE);text("×"+std::to_string(1<<std::min(bombCount,10)),297,19,24,GOLD,true);
@@ -327,7 +328,7 @@ void table(){
  else if(my)floatingText(game.table.kind==NONE?"自由领出 · 请选择手牌":"轮到你出牌",705,322,16,WHITE,true);
  auto pos=handPositions();
  for(int i=0;i<int(pos.size());i++){
-  int id=game.hands[0][i];auto a=pos[i];cardFace(id,a.x,a.y,a.w,a.h,selected[id],i==cursor&&!autoplay&&!game.over);
+  int id=game.hands[0][i];auto a=pos[i];if(!captureStill&&dealStarted&&now-dealStarted<1000){float t=std::clamp((int(now-dealStarted)-i*18)/420.0f,0.0f,1.0f);float e=1-std::pow(1-t,3.0f);a.x=int(640+(a.x-640)*e);a.y=int(150+(a.y-150)*e);}cardFace(id,a.x,a.y,a.w,a.h,selected[id],i==cursor&&!autoplay&&!game.over);
   if(suitFilter>=0&&Card{id}.suit()!=suitFilter&&!wild(id,game.level))box(a.x+1,a.y-(selected[id]?18:0)+1,a.w-2,a.h-2,7,{41,65,95,102});
  }
  if(organized){for(size_t g=0;g<orgGroups.size();g++){auto a=pos[orgGroupStart[g]];if(!orgGroups[g].label.empty()){int tw=std::min(a.w,88);box(a.x,632,tw,21,4,orgGroups[g].kind>=BOMB?Col{120,85,167,232}:Col{32,131,141,225});text(orgGroups[g].label,a.x+tw/2,633,13,WHITE,true);}}}
@@ -339,7 +340,7 @@ void table(){
  for(int i=0;i<4;i++){int x=338+i*55;if(suitFilter==i)box(x-22,660,44,43,12,{255,255,255,100});text(suits[i],x,662,31,i==1||i==2?Col{254,167,143}:WHITE,true);}
  pill(548,663,120,42,"恢复",true,true,21);pill(683,663,176,42,"R 一键理牌",false,true,21);
  pill(875,663,113,42,autoplay?"接管":"托管",false,!game.over,20);pill(1004,663,88,42,"表情",true,!game.over,20);pill(1106,663,150,42,"ZL 出牌记录",false,true,17);
- floatingText("↑↓ 选层  ←→ 换列",130,707,11,WHITE);floatingText("A 选牌  B 清选  RS 恢复  LS 花色",629,707,11,WHITE,true);
+ floatingText(organized?"↑↓ 选层  ←→ 换列":"←→ 选牌  R 理牌",130,707,11,WHITE);floatingText("A 选牌  B 清选  RS 恢复  LS 花色",629,707,11,WHITE,true);
  referenceCounter();
  recordResult();
  if(game.over){LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(380,150,520,340,false);text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
@@ -353,10 +354,10 @@ void overlay(){
  if(!modal)return;
  LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(210,84,860,548);
  if(modal==11){text("运行诊断",254,110,32,GOLD);text("数据目录："+base,254,176,18,CREAM);text(storageErrno?"存档错误："+storageOperation+" · errno "+std::to_string(storageErrno):"存档：目录已创建，最近一次写入成功",254,222,18,storageErrno?RED:CREAM);if(storageErrno)text(storageError.substr(0,72),254,252,17,MUTED);
- text(audioEngine.device?"音频：已连接 · "+audioEngine.driver:"音频错误："+audioEngine.error.substr(0,70),254,300,18,CREAM);text(audioEngine.hasMusic()?"背景音乐：已载入 24 秒循环音轨":"背景音乐："+audioEngine.musicError.substr(0,65),254,340,18,CREAM);text(std::string("总声音：")+(sound?"开启":"关闭")+" · 音乐 "+std::to_string(musicVolume)+"% · 音效 "+std::to_string(sfxVolume)+"%",254,378,18,CREAM);text("ROMFS："+std::string(romfsReady?"已挂载":"挂载失败"),254,415,18,MUTED);text("日志："+base+"boot.log",254,454,17,MUTED);button(290,520,300,"A 音频自检 / 重试",true);button(690,520,300,"重新检查存档目录");text("初始化失败时游戏会继续运行，不再因音频故障直接退出",640,590,16,MUTED,true);}
+ text(audioEngine.device?"音频：已连接 · "+audioEngine.driver:"音频错误："+audioEngine.error.substr(0,70),254,300,18,CREAM);text(audioEngine.hasMusic()?"背景音乐：已载入 24 秒循环音轨":"背景音乐："+audioEngine.musicError.substr(0,65),254,340,18,CREAM);text(std::string("总声音：")+(sound?"开启":"关闭")+" · 音乐 "+std::to_string(musicVolume)+"% · 音效 "+std::to_string(sfxVolume)+"% · 人声 "+std::to_string(voiceVolume)+"%",254,378,18,CREAM);text("ROMFS："+std::string(romfsReady?"已挂载":"挂载失败")+" · 人声："+(audioEngine.hasSpeech()?"已载入 37 条":audioEngine.speechError.substr(0,40)),254,415,18,MUTED);text("日志："+base+"boot.log",254,454,17,MUTED);button(290,520,300,"A 音频自检 / 重试",true);button(690,520,300,"重新检查存档目录");text("初始化失败时游戏会继续运行，不再因音频故障直接退出",640,590,16,MUTED,true);}
  if(modal==10){int player=focus+1;text("明牌手牌 · "+playerName(player),254,116,32,GOLD);text(player==2?"你的队友":"对手",895,128,18,MUTED);auto hand=game.hands[player];for(int i=0;i<int(hand.size());i++)cardFace(hand[i],256+(i%14)*55,190+(i/14)*150,50,112,false,false);button(290,542,250,"← 上一家");button(740,542,250,"下一家 →");}
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","声音与游戏设置","玩法说明","运行诊断 / 音频自检"};for(int i=0;i<5;i++)button(340,188+i*76,600,items[i],focus==i);}
- if(modal==2){text("声音与游戏设置",254,112,30,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","总声音","记牌器","出牌倒计时","背景音乐音量","操作音效音量"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"滨水蓝桌":skin==1?"青绿牌桌":"暮色紫桌",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭",std::to_string(musicVolume)+"%",std::to_string(sfxVolume)+"%"};for(int i=0;i<8;i++)choiceRow(315,164+i*51,650,labels[i],values[i],focus==i);text(audioEngine.device?"音频已连接 · A 切换，←→ 调节音量":"音频未连接 · 可在运行诊断中重试",640,580,16,MUTED,true);text("B 返回",960,600,16,MUTED);}
+ if(modal==2){text("声音与游戏设置",254,112,30,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","总声音","记牌器","出牌倒计时","背景音乐音量","操作音效音量","对局人声音量"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"原色夜景":skin==1?"深海蓝":"午夜紫",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭",std::to_string(musicVolume)+"%",std::to_string(sfxVolume)+"%",std::to_string(voiceVolume)+"%"};for(int i=0;i<9;i++)choiceRow(315,164+i*45,650,labels[i],values[i],focus==i);text(audioEngine.device?"音频已连接 · A 切换，←→ 调节音量":"音频未连接 · 可在运行诊断中重试",640,580,16,MUTED,true);text("B 返回",960,600,16,MUTED);}
 
  if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","↑↓ 选层，←→ 换列，A 选牌，X 出牌，B 清选，Y 提示。","R 一键理牌，RS 恢复按点数，LS 花色，L 不出，ZR 托管。","点按牌型标签可整组选择；滑动多选；底部可查找同花顺。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
  if(modal==4){text("本地战绩",254,116,34,GOLD);std::string v[]={std::to_string(total),std::to_string(wins),total?std::to_string(wins*100/total)+"%":"—",std::to_string(bombs)};const char*l[]={"完成对局","我方获胜","本地胜率","打出炸弹"};for(int i=0;i<4;i++){int x=330+(i%2)*340,y=200+(i/2)*150;box(x-28,y-12,280,126,16,{255,255,255,205});circle(x+206,y+24,17,{233,223,185});text("★",x+206,y+11,18,GOLD,true);text(v[i],x,y,46,CREAM);text(l[i],x,y+63,20,MUTED);}text("B 返回   ·   数据仅保存在本机",640,570,17,MUTED,true);}
@@ -386,25 +387,25 @@ enum Action{LEFT,RIGHT,UP,DOWN,CONFIRM,BACK,PLAY,HINT,PASS,SORT,AUTO,PAUSE,HELP,
 void act(Action a){
  if(modal){
   if(a==BACK||a==PAUSE){setModal(0);focus=0;sfx(2);return;}
-  int max=modal==1?5:modal==2?8:modal==6?8:modal==8?4:1;
-  if(modal==11){if(a==CONFIRM){if(!audioEngine.device)initAudio();audioEngine.configure(sound,musicVolume,sfxVolume);if(!sound||!sfxVolume)message("请先在设置中开启声音并提高音效音量");else if(audioEngine.device)sfx(4);else message("音频初始化失败，请查看日志");}return;}
-  if(modal==2&&(a==LEFT||a==RIGHT)&&focus>=6){int delta=a==RIGHT?10:-10;if(focus==6)musicVolume=std::clamp(musicVolume+delta,0,100);else sfxVolume=std::clamp(sfxVolume+delta,0,100);audioEngine.configure(sound,musicVolume,sfxVolume);saveStats();return;}
+  int max=modal==1?5:modal==2?9:modal==6?8:modal==8?4:1;
+  if(modal==11){if(a==CONFIRM){if(!audioEngine.device)initAudio();audioEngine.configure(sound,musicVolume,sfxVolume,voiceVolume);if(!sound||!sfxVolume)message("请先在设置中开启声音并提高音效音量");else if(audioEngine.device){sfx(3);audioEngine.say(speech::BOMB,3);}else message("音频初始化失败，请查看日志");}return;}
+  if(modal==2&&(a==LEFT||a==RIGHT)&&focus>=6){int delta=a==RIGHT?10:-10;if(focus==6)musicVolume=std::clamp(musicVolume+delta,0,100);else if(focus==7)sfxVolume=std::clamp(sfxVolume+delta,0,100);else voiceVolume=std::clamp(voiceVolume+delta,0,100);audioEngine.configure(sound,musicVolume,sfxVolume,voiceVolume);saveStats();return;}
   if(modal==10){if(a==LEFT||a==UP)focus=(focus+2)%3;if(a==RIGHT||a==DOWN)focus=(focus+1)%3;return;}
   if(modal==5){int pages=std::max(1,(int(game.history.size())+4)/5);if(a==LEFT||a==UP)historyPage=std::min(pages-1,historyPage+1);if(a==RIGHT||a==DOWN)historyPage=std::max(0,historyPage-1);return;}
   if(modal==6){if(a==LEFT||a==UP)focus=(focus+7)%8;if(a==RIGHT||a==DOWN)focus=(focus+1)%8;}
   else{if(a==UP)focus=(focus+max-1)%max;if(a==DOWN)focus=(focus+1)%max;}
   if(a==CONFIRM){
    if(modal==1){if(focus==0)setModal(0);else if(focus==1){checkpoint();screen=0;setModal(0);focus=4;}else if(focus==2){setModal(2);focus=0;}else if(focus==3){setModal(3);focus=0;}else{setModal(11);focus=0;}}
-   else if(modal==2){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)skin=(skin+1)%3;if(focus==2)speed=(speed+1)%3;if(focus==3)sound=!sound;if(focus==4)recorder=!recorder;if(focus==5)timerOn=!timerOn;if(focus==6)musicVolume=(musicVolume+10)%110;if(focus==7)sfxVolume=(sfxVolume+10)%110;audioEngine.configure(sound,musicVolume,sfxVolume);saveStats();if(screen)checkpoint();sfx(0);}
+   else if(modal==2){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)skin=(skin+1)%3;if(focus==2)speed=(speed+1)%3;if(focus==3)sound=!sound;if(focus==4)recorder=!recorder;if(focus==5)timerOn=!timerOn;if(focus==6)musicVolume=(musicVolume+10)%110;if(focus==7)sfxVolume=(sfxVolume+10)%110;if(focus==8)voiceVolume=(voiceVolume+10)%110;audioEngine.configure(sound,musicVolume,sfxVolume,voiceVolume);saveStats();if(screen)checkpoint();sfx(0);}
    else if(modal==8){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)speed=(speed+1)%3;if(focus==2)timerOn=!timerOn;saveStats();if(focus==3){setModal(0);start(pendingMode);}sfx(0);}
-   else if(modal==6){const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};addFx(FX_EMOTE,0,0,300,540,{},em[focus]);sfx(0);setModal(0);focus=0;}
+   else if(modal==6){const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};addFx(FX_EMOTE,0,0,300,540,{},em[focus]);audioEngine.say(speech::EMOTE0+focus);setModal(0);focus=0;}
   }
   return;
  }
  if(!screen){if(a==LEFT)focus=focus<4?(focus^1):4+(focus-4+3)%4;if(a==RIGHT)focus=focus<4?(focus^1):4+(focus-4+1)%4;if(a==UP)focus=focus<2?4+focus:focus<4?focus-2:2+(focus-4)/2;if(a==DOWN)focus=focus<2?focus+2:focus<4?4+(focus-2)*2:(focus-4)/2;if(a==PAUSE){quit=true;return;}if(a==HELP){setModal(3);focus=0;return;}
   if(a==CONFIRM){sfx(0);if(focus<4){pendingMode=focus;setModal(8);focus=3;}else if(focus==4){if(hasSave){Game g;if(loadSession(g)){game=g;screen=1;autoplay=false;clearSelection();cursor=0;lastAI=SDL_GetTicks();statRound=game.over?game.round:-1;resetHints();lastOver=game.over;fxList.clear();lastShown={};lastPassed={};}else message("存档无法读取");}}else{setModal(focus==5?4:focus==6?2:3);focus=0;}}return;}
  if(a==PAUSE){checkpoint();setModal(1);focus=0;sfx(0);return;}if(a==HELP){setModal(3);focus=0;return;}if(a==COUNTER){if(!recorder){recorder=true;saveStats();}counterOpen=!counterOpen;return;}if(a==HISTORY){setModal(game.over?7:5);historyPage=0;focus=0;return;}if(a==EMOTE){if(game.over)return;setModal(6);focus=0;return;}
- if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();organized=true;smartGrouped=true;suitFilter=-1;layoutHand.clear();statRound=-1;resetHints();lastOver=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
+ if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();organized=false;smartGrouped=false;suitFilter=-1;layoutHand.clear();statRound=-1;resetHints();lastOver=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};dealStarted=SDL_GetTicks();waitSpoken=false;sfx(6);audioEngine.say(speech::START);}}if(a==BACK){screen=0;focus=0;}return;}
  if(a==AUTO){autoplay=!autoplay;clearSelection();message(autoplay?"托管已开启，按 ZR 取消":"已取消托管");sfx(0);lastAI=SDL_GetTicks();return;}
  if(a==RESTORE){restoreHand();sfx(0);return;}
  if(a==SORT){organized=true;smartGrouped=true;suitFilter=-1;clearSelection();computeOrganizedGroups();cursor=0;message("一键理牌：同花顺、炸弹、连对与顺子已分列");sfx(0);return;}
@@ -431,9 +432,9 @@ void click(int x,int y){
   if(modal==11){if(Area{290,520,300,48}.contains(x,y))act(CONFIRM);if(Area{690,520,300,48}.contains(x,y)){prepareStorage();checkpoint();}return;}
   if(modal==10){if(Area{290,542,250,48}.contains(x,y))act(LEFT);if(Area{740,542,250,48}.contains(x,y))act(RIGHT);return;}
   if(modal==5){if(Area{290,562,250,48}.contains(x,y))act(LEFT);else if(Area{740,562,250,48}.contains(x,y))act(RIGHT);return;}
-  int count=modal==1?5:modal==2?8:modal==8?4:modal==6?8:0;
+  int count=modal==1?5:modal==2?9:modal==8?4:modal==6?8:0;
   for(int i=0;i<count;i++){
-   Area area=modal==1?Area{340,188+i*76,600,48}:modal==2?Area{315,164+i*51,650,48}:modal==8?Area{315,190+i*78,650,48}:Area{330+(i%2)*330,196+(i/2)*84,300,48};
+   Area area=modal==1?Area{340,188+i*76,600,48}:modal==2?Area{315,164+i*45,650,44}:modal==8?Area{315,190+i*78,650,48}:Area{330+(i%2)*330,196+(i/2)*84,300,48};
    if(area.contains(x,y)){focus=i;act(CONFIRM);return;}
   }
   return;
@@ -452,8 +453,8 @@ void click(int x,int y){
  beginHandGesture(x,y);
 
 }
-int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int layoutCapture=0;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
- for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-restored"){layoutCapture=1;s="--capture-game";}if(s=="--capture-selected"){layoutCapture=2;s="--capture-game";}if(s=="--capture-counter"){layoutCapture=3;s="--capture-game";}if(s=="--capture-flat"){layoutCapture=4;s="--capture-game";}if(s=="--capture-training-zoom"){captureModal=10;captureMode=2;s="--capture-game";}if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-diagnostics"){captureModal=11;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture-game";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
+int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false,captureMotion=false;int layoutCapture=0;int captureMode=0,captureModal=0,captureSkin=-1;std::string capturePath="preview.bmp";
+ for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-motion"){captureMotion=true;s="--capture-game";}if(s=="--capture-theme-night"){captureSkin=0;s="--capture-game";}if(s=="--capture-theme-ocean"){captureSkin=1;s="--capture-game";}if(s=="--capture-theme-purple"){captureSkin=2;s="--capture-game";}if(s=="--capture-organized"){layoutCapture=5;s="--capture-game";}if(s=="--capture-restored"){layoutCapture=1;s="--capture-game";}if(s=="--capture-selected"){layoutCapture=2;s="--capture-game";}if(s=="--capture-counter"){layoutCapture=3;s="--capture-game";}if(s=="--capture-flat"){layoutCapture=4;s="--capture-game";}if(s=="--capture-training-zoom"){captureModal=10;captureMode=2;s="--capture-game";}if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-diagnostics"){captureModal=11;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture-game";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
  base="sdmc:/switch/GuandanSwitch/";
  if(!fsdevGetDeviceFileSystem("sdmc")){Result mount=fsdevMountSdmc();if(R_FAILED(mount))fprintf(stderr,"SD mount failed: %08x\n",unsigned(mount));}
@@ -467,10 +468,10 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
  fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20]){bootLog(std::string("Embedded font failed: ")+TTF_GetError());return 1;}
  loadAvatars();loadBg();
- loadProfile();{Game old;hasSave=loadSession(old);}
+ loadProfile();captureStill=capture&&!captureMotion;if(captureSkin>=0)skin=captureSkin;{Game old;hasSave=loadSession(old);}
 
  bootLog("resources ready; loading audio");initAudio();bootLog("main loop ready");
- if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;ensureGroups();if(layoutCapture==1)restoreHand();if(layoutCapture==2)doHint();if(layoutCapture==3)counterOpen=true;if(layoutCapture==4)organized=false;}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
+ if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;ensureGroups();if(layoutCapture==1)restoreHand();if(layoutCapture==2)doHint();if(layoutCapture==3)counterOpen=true;if(layoutCapture==4)organized=false;if(layoutCapture==5)act(SORT);}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
 #ifdef __SWITCH__
  if(!appletMainLoop()){break;}padUpdate(&pad);u64 down=padGetButtonsDown(&pad);u64 held=padGetButtons(&pad);static Uint32 repeat=0;u64 dirs=HidNpadButton_Left|HidNpadButton_Right|HidNpadButton_Up|HidNpadButton_Down;if(down&HidNpadButton_StickLLeft)down|=HidNpadButton_Left;if(down&HidNpadButton_StickLRight)down|=HidNpadButton_Right;if(down&HidNpadButton_StickLUp)down|=HidNpadButton_Up;if(down&HidNpadButton_StickLDown)down|=HidNpadButton_Down;if(held&HidNpadButton_StickLLeft)held|=HidNpadButton_Left;if(held&HidNpadButton_StickLRight)held|=HidNpadButton_Right;if(held&HidNpadButton_StickLUp)held|=HidNpadButton_Up;if(held&HidNpadButton_StickLDown)held|=HidNpadButton_Down;if(down&dirs)repeat=SDL_GetTicks()+320;else if((held&dirs)&&SDL_GetTicks()>repeat){down|=held&dirs;repeat=SDL_GetTicks()+95;}
  struct Binding{u64 bit;Action a;};Binding bindings[]={{HidNpadButton_Left,LEFT},{HidNpadButton_Right,RIGHT},{HidNpadButton_Up,UP},{HidNpadButton_Down,DOWN},{HidNpadButton_A,CONFIRM},{HidNpadButton_B,BACK},{HidNpadButton_X,PLAY},{HidNpadButton_Y,HINT},{HidNpadButton_L,PASS},{HidNpadButton_R,SORT},{HidNpadButton_StickR,RESTORE},{HidNpadButton_StickL,SUIT},{HidNpadButton_ZR,AUTO},{HidNpadButton_ZL,HISTORY},{HidNpadButton_Plus,PAUSE},{HidNpadButton_Minus,HELP}};for(auto b:bindings)if(down&b.bit)act(b.a);
@@ -488,22 +489,27 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
    bool fresh=cur.kind!=NONE&&(old.kind!=cur.kind||old.cards.empty()||old.cards.front()!=cur.cards.front());
    bool passed=game.passed[p]&&!lastPassed[p];
    if(fresh){int sx=0,sy=0,dx=0,dy=0;if(p==0){sx=640;sy=540;}else if(p==1){sx=96;sy=300;}else if(p==2){sx=640;sy=120;}else{sx=1184;sy=300;}
-    if(p==0){dx=640;dy=330;}else if(p==1){dx=250;dy=300;}else if(p==2){dx=640;dy=205;}else{dx=1030;dy=300;}
-    addFx(FX_PLAY,sx,sy,dx,dy,cur.cards);if(cur.explosive())addFx(FX_BOMB,0,0,dx,dy,{});
+    int n=cur.cards.size(),step=std::min(34,230/std::max(1,n));int cx=p==0?88:p==1?263:p==2?705:1012;dx=cx-(step*(n-1)+48)/2;dy=p==0?438:p==2?(game.mode==2?185:94):205;
+    int cue=cur.explosive()?(cur.kind==JOKERS?speech::JOKERS:cur.kind==FLUSH?speech::FLUSH:speech::BOMB):cur.kind==PAIR?speech::PAIR:cur.kind==TRIPLE?speech::TRIPLE:cur.kind==FULLHOUSE?speech::FULLHOUSE:cur.kind==STRAIGHT?speech::STRAIGHT:cur.kind==PAIRS?speech::PAIRS:cur.kind==TRIPLES?speech::TRIPLES:speech::RANK2;
+    if(cur.kind==SINGLE){int rank=Card{cur.cards.front()}.rank();cue=rank<=14?speech::RANK2+rank-2:rank==16?speech::RANK16:speech::RANK17;}
+    audioEngine.say(cue,cur.explosive()?3:1);addFx(FX_PLAY,sx,sy,dx,dy,cur.cards);if(cur.explosive())addFx(FX_BOMB,0,0,dx,dy,{});
    }
-   if(passed)addFx(FX_PASS,0,0,p==0?300:p==1?96:p==2?640:1184,(p==0?420:p==1?260:p==2?90:260),{});
+   if(passed){audioEngine.say(speech::PASS);addFx(FX_PASS,0,0,p==0?300:p==1?96:p==2?640:1184,(p==0?420:p==1?260:p==2?90:260),{});}
   }
   lastShown=game.shown;lastPassed=game.passed;
-  if(game.over&&!lastOver){addFx(FX_WIN,0,0,0,0,{});sfx(4);}
+  if(game.over&&!lastOver){addFx(FX_WIN,0,0,0,0,{});sfx(4);audioEngine.say(game.finish[0]%2==0?speech::WIN:speech::LOSE,4);}
   lastOver=game.over;
  }
- if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(capture&&captureOver?0:speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;if(p==0){clearSelection();cursor=0;}lastAI=now;if(m.explosive())sfx(3);else sfx(1);checkpoint();}
+ if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(capture&&captureOver?0:speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;if(p==0){clearSelection();cursor=0;}lastAI=now;if(m.explosive())sfx(3);else sfx(m.kind==NONE?2:1);checkpoint();}
+ if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0&&!capture&&now-lastAI>11000&&!waitSpoken){waitSpoken=true;audioEngine.say(speech::WAIT,0);addFx(FX_EMOTE,0,0,640,370,{},"我等到花儿都谢了");}
  if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0&&!capture&&now-lastAI>TURN_MS){doAutoMove();sfx(5);message("时间到，已自动出牌");lastAI=now;checkpoint();}
+ if(captureMotion&&frame==70){doHint();doPlay();}
  if(smoke){if(frame==1){act(HELP);act(BACK);act(HINT);act(PLAY);}if(frame==2){act(PAUSE);act(BACK);act(AUTO);}if(frame>20)quit=true;}
  if(reviewMode&&game.over&&!modal&&frame>10)modal=7;
- trimCache();if(screen)table();else{home();homeButtons();}overlay();clearFx(now);
+ clearFx(now);trimCache();if(screen){table();drawFx(now);}else{home();homeButtons();}overlay();
  if(now<toastUntil){box(340,218,600,38,16,{10,22,16,238});text(toast,640,224,17,GOLD,true);}
- if((capture&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10&&!reviewMode)||(reviewMode&&game.over&&modal==7&&frame>18)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
+ if(captureMotion&&frame%3==0){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);std::string out=capturePath+"/frame-"+std::to_string(frame/3)+".bmp";SDL_SaveBMP(sf,out.c_str());SDL_FreeSurface(sf);if(frame>=111)quit=true;}
+ if((capture&&!captureMotion&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10&&!reviewMode)||(reviewMode&&game.over&&modal==7&&frame>18)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
  SDL_RenderPresent(ren);frame++;SDL_Delay(16);
  }
  if(screen){checkpoint();}saveStats();for(auto&kv:cache)SDL_DestroyTexture(kv.second.t);for(auto&kv:fonts)TTF_CloseFont(kv.second);for(auto t:avTex){if(t)SDL_DestroyTexture(t);}

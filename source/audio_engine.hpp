@@ -7,10 +7,13 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <fstream>
+#include "voice_cues.hpp"
 class AudioEngine {
  struct Voice {double frequency=0,phase=0;int age=0,duration=0,delay=0;double gain=0;bool noise=false;uint32_t random=0x51f15e;};
  std::array<Voice,12> voices{};
- std::vector<int16_t> music;
+ std::vector<int16_t> music,speechPcm;
+ std::array<std::pair<size_t,size_t>,speech::COUNT> speechRanges{};size_t speechFrame=0,speechEnd=0;int speechPriority=0,speechVolume=80;
  size_t musicFrame=0;uint64_t renderedFrames=0;
  bool master=true,suspended=false;int musicVolume=40,effectVolume=80;
  static void callback(void*user,Uint8*stream,int bytes){static_cast<AudioEngine*>(user)->render(reinterpret_cast<int16_t*>(stream),bytes/4);}
@@ -21,7 +24,7 @@ class AudioEngine {
  }
 public:
  static constexpr int Rate=48000;
- SDL_AudioDeviceID device=0;std::string error,musicError,driver;
+ SDL_AudioDeviceID device=0;std::string error,musicError,driver,speechError;
  bool loadMusic(const std::string&path){
   SDL_AudioSpec spec{};Uint8*raw=nullptr;Uint32 length=0;
   if(!SDL_LoadWAV(path.c_str(),&spec,&raw,&length)){musicError=SDL_GetError();return false;}
@@ -34,10 +37,20 @@ public:
   SDL_FreeWAV(raw);music.resize(music.size()/2*2);musicFrame=0;
   if(music.empty()){musicError="Empty music track";return false;}musicError.clear();return true;
  }
+ bool loadSpeech(const std::string&wav,const std::string&index){
+  AudioEngine decoder;if(!decoder.loadMusic(wav)){speechError=decoder.musicError;return false;}
+  std::ifstream f(index);int rate=0,count=0;f>>rate>>count;if(rate<=0||count!=speech::COUNT){speechError="Invalid speech index";return false;}
+  std::array<std::pair<size_t,size_t>,speech::COUNT> ranges{};
+  for(auto&r:ranges){uint64_t a=0,b=0;if(!(f>>a>>b)||a>=b){speechError="Truncated speech index";return false;}r={a*Rate/rate,b*Rate/rate};if(r.second>decoder.music.size()/2){speechError="Speech range exceeds bank";return false;}}
+  lock();speechPcm=std::move(decoder.music);speechRanges=ranges;speechFrame=speechEnd=0;unlock();speechError.clear();return true;
+ }
+ bool hasSpeech()const{return !speechPcm.empty();}
+ bool say(int cue,int priority=1){lock();if(!master||suspended||!speechVolume||cue<0||cue>=speech::COUNT||speechPcm.empty()||(speechFrame<speechEnd&&priority<speechPriority)){unlock();return false;}auto r=speechRanges[cue];speechFrame=r.first;speechEnd=r.second;speechPriority=priority;unlock();return true;}
+ bool speaking(){lock();bool active=speechFrame<speechEnd;unlock();return active;}
  bool init(const std::string&path){
   if(device)return true;
   if(SDL_InitSubSystem(SDL_INIT_AUDIO)<0){error=SDL_GetError();return false;}
-  loadMusic(path);
+  loadMusic(path);std::string directory=path.substr(0,path.find_last_of("/")+1);loadSpeech(directory+"voice.wav",directory+"voice.idx");
   SDL_AudioSpec want{};want.freq=Rate;want.format=AUDIO_S16SYS;want.channels=2;want.samples=1024;want.callback=callback;want.userdata=this;
   // SDL converts the requested stereo PCM to the hardware format if necessary.
   device=SDL_OpenAudioDevice(nullptr,0,&want,nullptr,0);
@@ -45,7 +58,7 @@ public:
   const char*name=SDL_GetCurrentAudioDriver();driver=name?name:"unknown";error.clear();SDL_PauseAudioDevice(device,0);return true;
  }
  void close(){if(device){SDL_CloseAudioDevice(device);device=0;}}
- void configure(bool enabled,int bgm,int sfx){lock();master=enabled;musicVolume=std::clamp(bgm,0,100);effectVolume=std::clamp(sfx,0,100);unlock();}
+ void configure(bool enabled,int bgm,int sfx,int speech=80){lock();master=enabled;musicVolume=std::clamp(bgm,0,100);effectVolume=std::clamp(sfx,0,100);speechVolume=std::clamp(speech,0,100);if(!enabled||!speechVolume)speechFrame=speechEnd;unlock();}
  void suspend(bool value){lock();suspended=value;unlock();}
  bool hasMusic()const{return !music.empty();}
  uint64_t frameCount(){lock();auto n=renderedFrames;unlock();return n;}
@@ -54,7 +67,7 @@ public:
   if(kind==0){tone(880,45,1700);tone(1175,35,950,35);}
   else if(kind==1){tone(540,75,2100);tone(400,60,1300,55);}
   else if(kind==2){tone(330,75,1400);tone(247,85,1000,65);}
-  else if(kind==3){tone(95,270,5000,0,true);tone(140,190,2800,180,true);}
+  else if(kind==3){tone(55,700,7000);tone(95,440,5400,0,true);tone(180,180,3000,25,true);tone(42,550,3500,160,true);}
   else if(kind==4){tone(523,140,2800);tone(659,140,2800,120);tone(784,160,2800,240);tone(1047,260,2800,380);}
   else if(kind==5){tone(330,120,2400);tone(247,120,2100,150);}
   else if(kind==6){tone(440,55,1300);tone(660,60,1600,60);tone(880,85,1800,125);}
@@ -65,6 +78,7 @@ public:
   std::memset(out,0,size_t(frames)*4);renderedFrames+=frames;if(!master||suspended)return;
   for(int i=0;i<frames;i++){
    double l=0,r=0;if(!music.empty()&&musicVolume){l=music[musicFrame*2]*musicVolume/100.0;r=music[musicFrame*2+1]*musicVolume/100.0;musicFrame=(musicFrame+1)%(music.size()/2);}
+   if(speechFrame<speechEnd&&speechVolume){l*=.35;r*=.35;l+=speechPcm[speechFrame*2]*speechVolume/100.0;r+=speechPcm[speechFrame*2+1]*speechVolume/100.0;speechFrame++;}
    double effect=0;for(auto&v:voices){if(v.age>=v.duration)continue;if(v.delay>0){v.delay--;continue;}
     double t=v.age/double(Rate),envelope=std::min(1.0,t/.004)*(1-v.age/double(v.duration));double wave=std::sin(v.phase*6.283185307179586);
     if(v.noise){v.random=v.random*1664525u+1013904223u;wave=wave*.35+(double(v.random>>8)/16777216.0*2-1)*.65;}

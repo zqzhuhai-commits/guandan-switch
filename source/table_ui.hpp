@@ -11,7 +11,7 @@ void computeOrganizedGroups(){
  cursor=std::clamp(cursor,0,std::max(0,int(reordered.size())-1));
 }
 void ensureGroups(){if(layoutHand!=game.hands[0]||layoutLevel!=game.level||layoutRound!=game.round||layoutSmart!=smartGrouped)computeOrganizedGroups();}
-void restoreHand(){organized=true;smartGrouped=false;suitFilter=-1;flushIndex=-1;clearSelection();computeOrganizedGroups();cursor=0;message("已恢复按点数分列，全部手牌保留");}
+void restoreHand(){organized=false;smartGrouped=false;suitFilter=-1;flushIndex=-1;clearSelection();computeOrganizedGroups();cursor=0;message("已恢复横排，按点数排序");}
 std::vector<HandPos> organizedPositions(){
  ensureGroups();int n=game.hands[0].size();std::vector<HandPos> pos(n);
  int ng=int(orgGroups.size());if(!ng)return pos;
@@ -31,7 +31,7 @@ std::vector<HandPos> handPositions(){
 }
 int hitHand(int x,int y){auto pos=handPositions();for(int i=int(pos.size())-1;i>=0;i--){int id=game.hands[0][i],yy=pos[i].y-(selected[id]?18:0);if(Area{pos[i].x,yy,pos[i].w,pos[i].h}.contains(x,y))return i;}return -1;}
 void beginHandGesture(int x,int y){
- gestureActive=false;if(!screen||modal||game.over||autoplay)return;
+ gestureActive=false;if(!screen||modal||game.over||autoplay||(!captureStill&&dealStarted&&SDL_GetTicks()-dealStarted<1000))return;
  int hit=hitHand(x,y);if(hit<0)return;gestureActive=true;std::fill(std::begin(gestureVisited),std::end(gestureVisited),false);
  int id=game.hands[0][hit];gestureValue=!selected[id];gestureVisited[id]=true;selected[id]=gestureValue;cursor=hit;sfx(0);
 }
@@ -47,25 +47,42 @@ void fillPolygon(std::initializer_list<SDL_Point> input,Col c){
  for(int y=std::max(0,ymin);y<=std::min(H-1,ymax);y++){std::vector<int>xs;for(size_t i=0;i<p.size();i++){auto a=p[i],b=p[(i+1)%p.size()];if((a.y<=y&&b.y>y)||(b.y<=y&&a.y>y))xs.push_back(a.x+(y-a.y)*(b.x-a.x)/(b.y-a.y));}std::sort(xs.begin(),xs.end());for(size_t i=1;i<xs.size();i+=2)SDL_RenderDrawLine(ren,xs[i-1],y,xs[i],y);}
 }
 void referenceScene(){
- vgrad(0,0,W,H,{100,177,222},{227,235,216});
- for(int i=0;i<6;i++){int x=120+i*217;circle(x,32+(i%3)*16,27,{255,255,255,48});circle(x+25,38+(i%3)*16,21,{255,255,255,48});}
- fillPolygon({{0,113},{82,82},{160,113},{249,78},{349,118},{0,145}},{110,156,146});
- fillPolygon({{870,120},{973,71},{1070,109},{1193,83},{1280,112},{1280,146}},{112,159,147});
- for(int i=0;i<33;i++){int x=i*42+6,hh=17+(i*17)%43;rect(x,129-hh,27,hh,{148,166,159});rect(x+3,132-hh,20,hh-3,{188,191,171});for(int yy=136-hh;yy<125;yy+=8)for(int xx=x+5;xx<x+20;xx+=7)rect(xx,yy,3,4,{229,223,182,130});}
- vgrad(0,130,W,67,{121,178,186},{197,221,208});for(int i=0;i<20;i++)hline((i*139)%W,136+i*3,70+(i*29)%120,{233,248,232,75});
- fillPolygon({{0,177},{1280,177},{1280,720},{0,720}},{143,133,129});
- fillPolygon({{159,163},{1121,163},{1452,720},{-172,720}},{49,63,85});
- fillPolygon({{172,174},{1108,174},{1424,720},{-144,720}},{142,159,172});
- Col felt=skin==1?Col{33,133,139}:skin==2?Col{88,103,161}:Col{69,120,188};
- fillPolygon({{182,183},{1098,183},{1400,720},{-120,720}},felt);
- for(int y=188;y<H;y+=4){int edge=182-(y-183)*302/537;hline(edge,y,W-2*edge,{255,255,255,5});}
- for(int side:{0,1}){int x=side?1256:24;rect(x-20,113,40,39,{117,109,94});hline(x-22,113,44,{178,170,144});for(int i=0;i<8;i++)circle(x-30+i*9,93-(i%3)*7,16,{52,Uint8(111+i%3*9),70});}
- text("掼 蛋 时 光",640,213,35,{24,68,130,70},true);
- const char*mode[]={"休闲单局","经典升级","明牌练习","定局挑战"};text(std::string(mode[game.mode])+"  ·  对家组队",640,258,16,{26,64,121,80},true);
+ const float time=SDL_GetTicks()/1000.0f;
+ if(skin==0){
+  vgrad(0,0,W,H,{12,24,48},{22,67,58});
+  circle(1055,63,31,{255,224,156,24});circle(1055,63,22,{255,236,189});
+  for(int i=0;i<37;i++){int x=i*37,hh=24+(i*23)%72;rect(x,160-hh,30,hh,{13,27,44});for(int yy=167-hh;yy<155;yy+=11)for(int xx=x+5;xx<x+27;xx+=9)rect(xx,yy,3,5,{244,196,105,Uint8(90+i%4*35)});}
+  vgrad(0,160,W,50,{25,62,69},{19,43,47});
+  for(int i=0;i<26;i++)hline((i*151)%W,165+i*2,28+i%5*8,{244,194,105,35});
+  line(0,70,220,94,{192,146,80});line(1060,94,1280,70,{192,146,80});
+  for(int side:{0,1}){int x=side?1225:55;circle(x,103,29,{255,190,72,18});box(x-13,84,26,35,10,{223,128,46});hline(x-10,88,20,{255,218,124});line(x,120,x,133,{238,180,81});}
+ }else if(skin==1){
+  vgrad(0,0,W,H,{5,24,65},{7,86,107});
+  for(int i=0;i<5;i++){int x=120+i*255;int drift=int(20*std::sin(time*.16f+i));fillPolygon({{x,0},{x+40,0},{x+220+drift,360},{x-160+drift,360}},{80,213,240,10});}
+  for(int i=0;i<27;i++){int x=(i*193+71)%W,y=20+(i*67)%180-int(std::fmod(time*(4+i%4),40));ring(x,y,3+i%6,1,{129,225,246,70});}
+  for(int i=0;i<8;i++){int x=(i*181+95)%W,y=98+i%3*23;fillPolygon({{x-10,y},{x+8,y-4},{x+8,y+4}},{46,131,160,145});fillPolygon({{x-10,y},{x-17,y-5},{x-17,y+5}},{46,131,160,145});}
+  for(int side:{0,1})for(int i=0;i<6;i++){int x=side?1260-i*13:20+i*13;for(int y=190;y>100+i*8;y-=8)line(x+int(8*std::sin(y*.04f+i)),y,x+int(8*std::sin((y-8)*.04f+i)),y-8,{16,107,125,170});}
+ }else{
+  vgrad(0,0,W,H,{24,13,57},{85,46,111});
+  for(int i=0;i<65;i++){int x=(i*173+49)%W,y=10+(i*47)%157;Uint8 alpha=Uint8(115+65*std::sin(time*.6f+i));circle(x,y,i%7==0?2:1,{237,220,255,alpha});}
+  circle(1040,74,44,{199,169,249,18});circle(1040,74,31,{242,225,255});circle(1053,63,27,{29,17,63});
+  fillPolygon({{0,155},{94,107},{190,150},{306,97},{415,167},{0,221}},{53,35,89});
+  fillPolygon({{819,170},{923,113},{1015,157},{1134,100},{1280,151},{1280,221}},{60,37,99});
+  for(int side:{0,1}){int x=side?1234:46;rect(x-9,146,18,58,{37,25,67});circle(x,142,26,{111,68,143});circle(x-17,150,18,{90,53,126});}
+ }
+ Col frame=skin==0?Col{77,49,29}:skin==1?Col{16,45,77}:Col{51,30,76};
+ Col trim=skin==0?Col{178,139,75}:skin==1?Col{107,178,203}:Col{182,145,211};
+ Col felt=skin==0?Col{22,85,65}:skin==1?Col{20,76,128}:Col{83,48,119};
+ fillPolygon({{159,177},{1121,177},{1452,720},{-172,720}},frame);
+ fillPolygon({{172,186},{1108,186},{1424,720},{-144,720}},trim);
+ fillPolygon({{182,192},{1098,192},{1400,720},{-120,720}},felt);
+ for(int y=196;y<H;y+=4){int edge=182-(y-192)*302/528;hline(edge,y,W-2*edge,{255,255,255,4});}
+ text("掼 蛋 时 光",640,213,35,{255,255,255,20},true);
+ const char*mode[]={"休闲单局","经典升级","明牌练习","定局挑战"};text(std::string(mode[game.mode])+"  ·  对家组队",640,258,16,{255,255,255,34},true);
 }
 void pill(int x,int y,int w,int h,const std::string&label,bool gold,bool enabled=true,int fs=22){
  box(x+1,y+4,w,h,h/2,{17,44,85,60});box(x-1,y-1,w+2,h+2,h/2,enabled?Col{255,255,255,150}:Col{255,255,255,45});
- Col a=gold?Col{255,224,127}:Col{119,168,243},b=gold?Col{239,168,52}:Col{60,105,199};if(!enabled){a={121,147,170};b={96,118,150};}
+ Col a=gold?Col{255,224,127}:skin==0?Col{67,145,115}:skin==1?Col{91,160,226}:Col{153,115,205},b=gold?Col{239,168,52}:skin==0?Col{28,91,70}:skin==1?Col{35,89,168}:Col{91,57,146};if(!enabled){a={121,147,170};b={96,118,150};}
  roundedGradient(x,y,w,h,h/2,a,b);hline(x+22,y+4,w-44,{255,255,255,90});text(label,x+w/2,y+(h-fs)/2-3,fs,gold?Col{103,59,15}:WHITE,true);
 }
 void tableSeat(int p,int x,int y,bool teammate=false){

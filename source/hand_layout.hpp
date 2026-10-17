@@ -26,7 +26,7 @@ inline std::vector<HandGroup> arrangeHand(const std::vector<int>& hand,int level
   if(cards[0]%54>=52&&cards.size()>2)kind=NONE;
   groups.push_back({cards,cards.size()>=4&&kind==BOMB?std::to_string(cards.size())+"炸":cards.size()==3?"三张":cards.size()==2?"对子":"",kind});
  }
- for(size_t i=0;i<singles.size();i+=4){auto end=std::min(singles.size(),i+4);groups.push_back({std::vector<int>(singles.begin()+i,singles.begin()+end),"散牌",NONE});}
+ for(int id:singles)groups.push_back({{id},"",SINGLE});
  return groups;
 }
 }

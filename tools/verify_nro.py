@@ -27,7 +27,7 @@ while entry < file_meta_size:
     assert file_data+data_offset+data_size <= len(r)
     entries[name] = r[file_data+data_offset:file_data+data_offset+data_size]
     entry += 32+((name_len+3)//4)*4
-for name in ('lobby-seaside.png', 'characters.png', 'font.otf', 'music.wav'):
+for name in ('lobby-seaside.png', 'characters.png', 'font.otf', 'music.wav', 'voice.wav', 'voice.idx'):
     assert name in entries, f'Missing embedded resource: {name}'
     assert hashlib.sha256(entries[name]).digest() == hashlib.sha256((Path('romfs')/name).read_bytes()).digest(), f'Stale embedded asset: {name}'
 elf = Path('GuandanSwitch.elf').read_bytes()
