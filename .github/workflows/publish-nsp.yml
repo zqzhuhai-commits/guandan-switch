@@ -1,8 +1,8 @@
-name: Publish verified v0.5.0 NSP and screenshots
+name: Publish verified v0.5.1 NSP and screenshots
 on:
   push:
     branches: [main]
-    paths: ['release/v0.5.0/**', '.github/workflows/publish-nsp.yml']
+    paths: ['release/v0.5.1/**', '.github/workflows/publish-nsp.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
           python3 - <<'PY'
           import json, subprocess
           from pathlib import Path
-          m=json.loads(Path('release/v0.5.0/native-nsp.json').read_text())
+          m=json.loads(Path('release/v0.5.1/native-nsp.json').read_text())
           run=json.loads(subprocess.check_output(['gh','run','view',str(m['build_run']),'--json','headSha,conclusion'],text=True))
           assert run['headSha']==m['build_commit'] and run['conclusion']=='success'
           subprocess.run(['gh','run','download',str(m['build_run']),'-n','switch-native-build','-D','dist'],check=True)
@@ -36,15 +36,15 @@ jobs:
         run: python3 tools/package_release.py
       - uses: actions/upload-artifact@v4
         with:
-          name: GuandanSwitch-v0.5.0-with-NSP
+          name: GuandanSwitch-v0.5.1-with-NSP
           path: |
             dist/GuandanTime.nsp
             dist/GuandanSwitch.nro
-            dist/GuandanSwitch-v0.5.0.zip
+            dist/GuandanSwitch-v0.5.1.zip
             dist/SHA256SUMS.txt
-      - name: Publish v0.5.0 without replacing prior versions
+      - name: Publish v0.5.1 without replacing prior versions
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create v0.5.0 dist/GuandanTime.nsp dist/GuandanSwitch.nro dist/GuandanSwitch-v0.5.0.zip dist/SHA256SUMS.txt --target "$GITHUB_SHA" --title '掼蛋时光 v0.5.0 · 参考牌桌重制与默认竖向理牌 测试版' --notes-file dist/RELEASE-NOTES.md --prerelease
+          gh release create v0.5.1 dist/GuandanTime.nsp dist/GuandanSwitch.nro dist/GuandanSwitch-v0.5.1.zip dist/SHA256SUMS.txt --target "$GITHUB_SHA" --title '掼蛋时光 v0.5.1 · 主题、横排手牌与声音动效 测试版' --notes-file dist/RELEASE-NOTES.md --prerelease

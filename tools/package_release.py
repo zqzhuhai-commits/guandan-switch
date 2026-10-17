@@ -7,10 +7,10 @@ import subprocess
 import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT/'dist'
-PACKAGE = DIST/'GuandanSwitch-v0.5.0'
+PACKAGE = DIST/'GuandanSwitch-v0.5.1'
 PACKAGE.mkdir(exist_ok=True)
 shutil.copy2(DIST/'GuandanSwitch.nro', PACKAGE/'GuandanSwitch.nro')
-notes = (ROOT/'release/notes-v0.5.md').read_text()
+notes = (ROOT/'release/notes-v0.5.1.md').read_text()
 if (DIST/'GuandanTime.nsp').exists():
     shutil.copy2(DIST/'GuandanTime.nsp', PACKAGE/'GuandanTime.nsp')
     notes += '\n本次已生成原生单文件 NSP，游戏和资源全部内嵌。\n'
@@ -33,7 +33,7 @@ shutil.copy2(ROOT/'romfs/font.otf', font)
 if (DIST/'BUILD-SOURCE-COMMIT.txt').exists():
     shutil.copy2(DIST/'BUILD-SOURCE-COMMIT.txt', PACKAGE/'BUILD-SOURCE-COMMIT.txt')
 subprocess.run(['git','rev-parse','HEAD'], cwd=ROOT, check=True, stdout=(PACKAGE/'SOURCE-COMMIT.txt').open('w'))
-archive = DIST/'GuandanSwitch-v0.5.0.zip'
+archive = DIST/'GuandanSwitch-v0.5.1.zip'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
     for p in sorted(PACKAGE.rglob('*')):
         if p.is_file(): z.write(p, p.relative_to(DIST))
