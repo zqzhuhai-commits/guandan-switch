@@ -96,8 +96,8 @@ void trimCache(){if(cache.size()>650){for(auto&kv:cache)SDL_DestroyTexture(kv.se
 std::string rankName(int r){return r==14?"A":r==13?"K":r==12?"Q":r==11?"J":r==17?"大王":r==16?"小王":std::to_string(r);}
 std::string playerName(int p){return p==0?"你":p==1?"南风":p==2?"小满":"青竹";}
 void message(const std::string&s){toast=s;toastUntil=SDL_GetTicks()+2800;}
-void queueTone(int freq,int ms,int vol,bool noise=false){if(!audioDevice||!sound||sfxVolume<=0)return;double gain=sfxVolume/100.0;int n=48000/1000*ms;std::vector<int16_t>s(n);for(int i=0;i<n;i++){double t=i/48000.0;double env=1.0-i/double(n);double v=std::sin(6.2831853*freq*t);if(noise)v+=((std::rand()%2001)/1000.0-1.0)*0.8;int16_t x=int16_t(v*vol*env*gain);s[i]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
-void queueMusicNote(int freq,int ms,int vol){if(!audioDevice||!sound||musicVolume<=0)return;double gain=musicVolume/100.0;int n=48000/1000*ms;std::vector<int16_t>s(n);for(int i=0;i<n;i++){double t=i/48000.0;double env=std::min(1.0,i/600.0)*std::min(1.0,(n-i)/800.0);double v=std::sin(6.2831853*freq*t)*0.6+std::sin(6.2831853*freq*2*t)*0.2+std::sin(6.2831853*freq*0.5*t)*0.15;int16_t x=int16_t(v*vol*env*gain);s[i]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
+void queueTone(int freq,int ms,int vol,bool noise=false){if(!audioDevice||!sound||sfxVolume<=0)return;double gain=sfxVolume/100.0;int n=44100/1000*ms;std::vector<int16_t>s(n*2);for(int i=0;i<n;i++){double t=i/44100.0;double env=1.0-i/double(n);double v=std::sin(6.2831853*freq*t);if(noise)v+=((std::rand()%2001)/1000.0-1.0)*0.8;int16_t x=int16_t(v*vol*env*gain);s[i*2]=x;s[i*2+1]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
+void queueMusicNote(int freq,int ms,int vol){if(!audioDevice||!sound||musicVolume<=0)return;double gain=musicVolume/100.0;int n=44100/1000*ms;std::vector<int16_t>s(n*2);for(int i=0;i<n;i++){double t=i/44100.0;double env=std::min(1.0,i/600.0)*std::min(1.0,(n-i)/800.0);double v=std::sin(6.2831853*freq*t)*0.6+std::sin(6.2831853*freq*2*t)*0.2+std::sin(6.2831853*freq*0.5*t)*0.15;int16_t x=int16_t(v*vol*env*gain);s[i*2]=x;s[i*2+1]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
 void sfx(int kind){if(!audioDevice||!sound)return;
  if(kind==0){queueTone(880,40,800);queueTone(1320,30,500);} // 按钮点击
  else if(kind==1){queueTone(520,60,1600);queueTone(380,50,1200);} // 出牌
@@ -111,7 +111,7 @@ void sfx(int kind){if(!audioDevice||!sound)return;
 }
 void musicStart(){musicStep=0;musicNextTick=SDL_GetTicks();musicPlaying=true;}
 void musicStop(){musicPlaying=false;}
-void musicUpdate(){if(!musicPlaying||!audioDevice||!sound||musicVolume<=0)return;Uint32 now=SDL_GetTicks();if(now<musicNextTick)return;if(SDL_GetQueuedAudioSize(audioDevice)>48000*2)return;int idx=musicStep%MELODY_LEN;int note=MELODY[idx];if(note>=0)queueMusicNote((int)PENTA[note],MUSIC_STEP_MS,900);int bassIdx=musicStep%BASS_LEN;int bnote=BASS[bassIdx];if(bnote>=0)queueMusicNote((int)(PENTA[bnote]*0.5),MUSIC_STEP_MS*2,600);musicStep++;musicNextTick=now+MUSIC_STEP_MS;}
+void musicUpdate(){if(!musicPlaying||!audioDevice||!sound||musicVolume<=0)return;Uint32 now=SDL_GetTicks();if(now<musicNextTick)return;if(SDL_GetQueuedAudioSize(audioDevice)>44100*4)return;int idx=musicStep%MELODY_LEN;int note=MELODY[idx];if(note>=0)queueMusicNote((int)PENTA[note],MUSIC_STEP_MS,900);int bassIdx=musicStep%BASS_LEN;int bnote=BASS[bassIdx];if(bnote>=0)queueMusicNote((int)(PENTA[bnote]*0.5),MUSIC_STEP_MS*2,600);musicStep++;musicNextTick=now+MUSIC_STEP_MS;}
 void clearSelection(){std::fill(std::begin(selected),std::end(selected),false);}
 void saveStats(){std::ofstream f(base+"profile.txt");f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn<<' '<<musicVolume<<' '<<sfxVolume;}
 void checkpoint(){hasSave=game.save(base+"session.dat");if(!hasSave)message("存档写入失败，请检查 SD 卡空间");}
@@ -484,13 +484,13 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
 #else
  fontPath="romfs/font.otf";
 #endif
- if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)<0){fprintf(stderr,"SDL: %s\n",SDL_GetError());return 1;}if(SDL_InitSubSystem(SDL_INIT_AUDIO)<0){fprintf(stderr,"Audio init failed (continuing without sound): %s\n",SDL_GetError());}if(TTF_Init()<0){fprintf(stderr,"TTF: %s\n",TTF_GetError());return 1;}
+ if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)<0){fprintf(stderr,"SDL: %s\n",SDL_GetError());return 1;}if(TTF_Init()<0){fprintf(stderr,"TTF: %s\n",TTF_GetError());return 1;}
  window=SDL_CreateWindow("掼蛋时光 | Guandan Switch",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE);
  ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);if(!ren)ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
  SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
  fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20]){fprintf(stderr,"Font: %s\n",TTF_GetError());return 1;}
  loadAvatars();loadBg();
- SDL_AudioSpec spec{};spec.freq=48000;spec.format=AUDIO_S16SYS;spec.channels=1;spec.samples=1024;audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,nullptr,0);if(audioDevice)SDL_PauseAudioDevice(audioDevice,0);
+ {SDL_AudioSpec spec{};spec.freq=44100;spec.format=AUDIO_S16LSB;spec.channels=2;spec.samples=2048;SDL_AudioSpec obtained{};audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,&obtained,SDL_AUDIO_ALLOW_ANY_CHANGE);if(audioDevice){fprintf(stderr,"Audio: %dHz %dch\n",obtained.freq,obtained.channels);SDL_PauseAudioDevice(audioDevice,0);}else fprintf(stderr,"Audio device unavailable: %s\n",SDL_GetError());}
  std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;int savedMusicVol=50;if(profile>>savedMusicVol)musicVolume=std::clamp(savedMusicVol,0,100);int savedSfxVol=80;if(profile>>savedSfxVol)sfxVolume=std::clamp(savedSfxVol,0,100);skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}if(sound&&musicVolume>0)musicStart();
  if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
 #ifdef __SWITCH__
