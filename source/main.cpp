@@ -486,11 +486,14 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
 #endif
  if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_GAMECONTROLLER)<0){fprintf(stderr,"SDL: %s\n",SDL_GetError());return 1;}if(TTF_Init()<0){fprintf(stderr,"TTF: %s\n",TTF_GetError());return 1;}
  window=SDL_CreateWindow("掼蛋时光 | Guandan Switch",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE);
- ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);if(!ren)ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
+ ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
  SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
  fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20]){fprintf(stderr,"Font: %s\n",TTF_GetError());return 1;}
+ // 早期加载画面
+ SDL_SetRenderDrawColor(ren,8,16,28,255);SDL_RenderClear(ren);text("加载中...",640,340,36,{200,220,255},true);SDL_RenderPresent(ren);
  loadAvatars();loadBg();
- {SDL_AudioSpec spec{};spec.freq=44100;spec.format=AUDIO_S16LSB;spec.channels=2;spec.samples=2048;SDL_AudioSpec obtained{};audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,&obtained,SDL_AUDIO_ALLOW_ANY_CHANGE);if(audioDevice){fprintf(stderr,"Audio: %dHz %dch\n",obtained.freq,obtained.channels);SDL_PauseAudioDevice(audioDevice,0);}else fprintf(stderr,"Audio device unavailable: %s\n",SDL_GetError());}
+ // 音频：默认跳过避免模拟器挂起，存在 enable_audio 文件时才尝试初始化
+ {bool tryAudio=false;std::ifstream af(base+"enable_audio");if(af.good())tryAudio=true;if(tryAudio){SDL_AudioSpec spec{};spec.freq=44100;spec.format=AUDIO_S16LSB;spec.channels=2;spec.samples=2048;SDL_AudioSpec obtained{};audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,&obtained,SDL_AUDIO_ALLOW_ANY_CHANGE);if(audioDevice){fprintf(stderr,"Audio: %dHz %dch\n",obtained.freq,obtained.channels);SDL_PauseAudioDevice(audioDevice,0);}else fprintf(stderr,"Audio unavailable: %s\n",SDL_GetError());}}
  std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;int savedMusicVol=50;if(profile>>savedMusicVol)musicVolume=std::clamp(savedMusicVol,0,100);int savedSfxVol=80;if(profile>>savedSfxVol)sfxVolume=std::clamp(savedSfxVol,0,100);skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}if(sound&&musicVolume>0)musicStart();
  if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
 #ifdef __SWITCH__
