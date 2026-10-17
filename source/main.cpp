@@ -508,7 +508,7 @@ int main(int argc,char**argv){
 #endif
  if(SDL_Init(SDL_INIT_VIDEO)<0){return 1;}
  window=SDL_CreateWindow("Guandan",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN);
- ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){return 1;}
+ ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED);if(!ren){return 1;}
  SDL_RenderSetLogicalSize(ren,W,H);
  // 第一步：红色屏幕 - 证明SDL渲染器已启动
  SDL_SetRenderDrawColor(ren,180,30,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
