@@ -5,7 +5,7 @@ import hashlib
 import json
 import struct
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = ROOT/'release/v0.4.1'
+RELEASE = ROOT/'release/v0.5.0'
 manifest = json.loads((RELEASE/'native-nsp.json').read_text())
 data = bytearray()
 for entry in manifest['parts']:

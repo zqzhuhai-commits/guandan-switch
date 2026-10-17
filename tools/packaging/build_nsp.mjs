@@ -70,7 +70,7 @@ for (const [name, nca] of files) {
     assert.equal(npdm.readBigUInt64LE(npdm.readUInt32LE(0x70) + 0x10), 0x010000abcd000000n);
     const assets = await decode(parsed.sections.find(s => s.romfsData).romfsData);
     for (const name of Object.keys(romfs)) {
-      assert.ok(assets[name] instanceof Blob, 'Missing embedded ' + name);
+      assert.ok(assets[name] && typeof assets[name].arrayBuffer === 'function', 'Missing embedded ' + name);
       assert.equal(await blobDigest(assets[name]), await blobDigest(romfs[name]), 'Stale asset ' + name);
     }
   } else if (parsed.contentType === 2) {

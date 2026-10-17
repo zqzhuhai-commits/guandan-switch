@@ -1,21 +1,31 @@
 # 掼蛋时光 · Switch 原生单机版
 
-当前版本：**v0.4.1 测试版**。新版全屏界面、渐变蒙版、菜单弹窗及对局功能从当前源码重新编译，经过自动检查后由 GitHub Actions 发布。尚未进行实体 Switch 验证。
+当前版本：**v0.5.0 测试版**。基于 v0.4.1 重新制作参考图中的牌桌与操作布局，发牌后默认竖向智能理牌；不使用后续试验版作为实现基础。尚未进行实体 Switch 验证。
 
-[下载 v0.4.1 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/GuandanSwitch-v0.4.1.zip) · [下载新版 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/GuandanTime.nsp) · [下载独立 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/GuandanSwitch.nro) · [SHA-256 校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.4.1/SHA256SUMS.txt)
+[下载 v0.5.0 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.0/GuandanSwitch-v0.5.0.zip) · [下载新版 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.0/GuandanTime.nsp) · [下载独立 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.0/GuandanSwitch.nro) · [SHA-256 校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.0/SHA256SUMS.txt)
 
-本版同时提供原生单文件 NSP 和独立 NRO，字体、背景和角色全部内嵌，无需另拷资源或 NRO 转发文件。NSP 使用本版源码的原生 NSO 打包，密钥仅在本地构建时使用，不包含在仓库和发行包中。仓库根目录 `GuandanTime.nsp` 是历史文件，请下载上方 v0.4.1 Release 附件。
+本版同时提供原生单文件 NSP 和独立 NRO，字体、背景和角色全部内嵌，无需另拷资源或 NRO 转发文件。NSP 使用本版源码的原生 NSO 打包，密钥仅在本地构建时使用，不包含在仓库和发行包中。仓库根目录 `GuandanTime.nsp` 是历史文件，请下载上方 v0.5.0 Release 附件。
 
 参考腾讯《大掼蛋》的休闲棋牌氛围，独立编写规则、AI 和界面；不含腾讯的程序、美术、角色、音频或账号服务。游戏完全离线，无内购、无联网、无真钱交易。
 
 
 ## 界面截图
 
-以下为 v0.4.1 同源 SDL2 桌面程序实际渲染的 1280×720 截图，展示全屏背景、菜单弹窗和细黑边扑克牌；不是实体 Switch 截图。点击图片可查看原图。
+以下为 v0.5.0 同源 SDL2 桌面程序实际渲染的 1280×720 截图，展示默认竖向手牌、参考牌桌、菜单弹窗和细黑边扑克牌；不是实体 Switch 截图。点击图片可查看原图。
 
-| 大厅与导航 | 标准牌桌 |
+| 默认竖向智能理牌 | 选牌与出牌按钮 |
 |---|---|
-| ![大厅与导航](preview/home.png) | ![标准牌桌](preview/game.png) |
+| ![默认竖向智能理牌](preview/game.png) | ![选牌与出牌按钮](preview/selected.png) |
+
+| 恢复点数分列 | 记牌器 |
+|---|---|
+| ![恢复点数分列](preview/restored.png) | ![记牌器](preview/counter.png) |
+
+| 明牌详情 | 可选平铺布局 |
+|---|---|
+| ![明牌详情](preview/training-zoom.png) | ![可选平铺布局](preview/flat.png) |
+
+![大厅与导航](preview/home.png)
 
 | 明牌练习 | 开局设置 |
 |---|---|
@@ -37,11 +47,15 @@
 |---|---|
 | ![暂停菜单](preview/pause.png) | ![本地战绩](preview/stats.png) |
 
-## v0.4.1 更新
+## v0.5.0 更新
 
-- 所有扑克牌（包括牌背、明牌、手牌、出牌与记录中的缩略牌）统一增加 1 像素黑色圆角边框，保留选牌和焦点的外侧高亮。
-- README 增加 12 张带界面名称的截图。
-- 提供本版原生单文件 NSP，核对 NCA、CNMT、NSO、NPDM、版本信息和内嵌素材。
+- 发牌后默认竖向叠放，按同花顺、炸弹、连对、顺子等整理；理牌只改变显示顺序，不改变手牌内容。牌面保留细黑边框。
+- 全屏滨水蓝色牌桌，三家头像分列、队友标记、倒计时和靠近手牌的“不出 / 提示 / 出牌 / 清空”。
+- 底部“一键理牌”重新按牌型分列；“恢复”回到按点数分列。花色按钮只突出对应花色及逢人配，不隐藏或删除牌；“同花顺”循环选择候选组合，确认后仍须手动出牌。
+- 点击列底牌型标签可选中或取消整组；支持鼠标及触屏滑动多选，同一手势不会反复切换同一张牌。
+- 对手回合也可提前选牌，实际出牌仍受轮次和牌型校验。明牌模式点击对手或队友头像可放大查看该家手牌。
+- 记牌器可通过顶部按钮展开；更多、规则、出牌记录、托管和表情均保持实际操作。
+- 追加 12,288 组手牌排列守恒检查、24 局持续重排后的完整对局，以及分层导航、恢复和触屏命中的验证。
 
 ## v0.4 更新
 
@@ -58,7 +72,7 @@
 - 调整明牌模式布局，避免记牌器遮住对手手牌；修复头像透明与颜色通道、主题切换和记牌器大小王数量。
 - 复盘标记为牌力统计（非 AI 评估），修复坐标网格和玩家图例。
 
-## 安装 v0.4.1
+## 安装 v0.5.0
 
 1. 下载 Release 中的 `GuandanSwitch.nro`，或解压完整发行包。
 2. 将 NRO 放到 SD 卡 `switch/GuandanSwitch/GuandanSwitch.nro`。
@@ -83,13 +97,15 @@
 
 | 按键 | 功能 |
 |---|---|
-| 方向键 / 左摇杆 | 大厅选项、手牌光标、弹窗选项 |
+| 方向键 / 左摇杆 | 左右换列、上下换层；大厅和弹窗选择 |
 | A | 确认 / 选中或取消当前手牌 / 发送表情 |
 | X | 打出所选牌 |
 | B | 清空选牌 / 关闭弹窗 / 结算返回大厅 |
 | Y | 轮换提示方案，确认后按 X 出牌 |
 | L | 不出；自由领出时不可不出 |
-| R | 按点数重新理牌 |
+| R | 一键智能理牌并竖向分列 |
+| 按下右摇杆（RS） | 恢复按点数竖向分列 |
+| 按下左摇杆（LS） | 循环突出四花色 / 全部 |
 | ZR | 开启或取消托管 |
 | ZL | 查看本次运行期间的出牌记录；结算后按 ZL 打开复盘报告 |
 | Z | 快捷表情（8 条固定文案，方向键选择，A 发送） |
@@ -135,7 +151,7 @@
 ## 当前验证与限制
 
 - 规则测试覆盖牌型、双副牌、配牌、四王与十张炸弹、非法操作、接风、存档兼容、连续进贡升级；四种模式合计 256 局自动对局。
-- 同源 SDL2 桌面界面完成构建与真实操作处理函数测试，覆盖模式设置、提示轮换、暂停计时、触屏及结算导航；`preview/` 为程序实际渲染的 12 个界面，不是真机截图。
+- 同源 SDL2 桌面界面完成构建与真实操作处理函数测试，覆盖模式设置、提示轮换、暂停计时、触屏及结算导航；`preview/` 为程序实际渲染的 17 个界面，不是真机截图。
 - Switch 发行文件由固定 devkitPro 工具链从当前源码编译，校验 AArch64、NRO0、内嵌资源边界及新素材内容，附 SHA-256 清单。NSP 只在构建输入齐全时生成并校验；历史 NSP 不冒充本版。
 - 未进行实体 Switch 启动、安装、音频、触屏、休眠恢复和性能验证。本版作为预发布提供。
 - 进阶 AI 是规则启发式策略；复盘展示牌力和余牌统计，不声称竞技 AI 评估。没有联网对战、本地多人、语音播报或残局编辑器。
@@ -147,7 +163,7 @@
 
 为兼容上传接口，完整发行包保存在 `release/*.partNN`，各片的校验值在 `release/manifest.json`。克隆后先执行 `python3 tools/restore_assets.py`，自动校验并还原完整 ZIP、内置字体和单文件 NSP；不需要联网下载字体。
 
-Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make APP_JSON= APP_VERSION=0.4.1 -j2` 生成独立 NRO。
+Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make APP_JSON= APP_VERSION=0.5.0 -j2` 生成独立 NRO。
 
 本次使用的开发环境镜像为：
 `devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d`
@@ -156,14 +172,16 @@ Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_
 
 桌面实际界面截图：安装 Pillow 后执行 `python3 tools/capture_previews.py`；脚本使用独立临时存档和固定发牌种子，不覆盖玩家存档。可通过 `--data-dir <目录>` 指定桌面存档目录。GitHub Actions 的 `Verify game and desktop UI` 会自动构建、测试并上传界面截图。
 
-原生 NSP 的可选构建由 `tools/packaging/build_nsp.mjs` 完成：使用本次编译的 NSO、NPDM、NACP 和当前 RomFS，核对 NCA 内容散列及内嵌资源；需要调用者提供 `NSP_KEYS`，详见下面的可复现发布说明。
+原生 NSP 的构建由 `tools/packaging/build_nsp.mjs` 完成：使用本次编译的 NSO、NPDM、NACP 和当前 RomFS，核对 NCA 内容散列及内嵌资源；需要调用者提供 `NSP_KEYS`，详见下面的可复现发布说明。
 
 原创代码按 MIT License 提供；第三方库与字体遵循各自许可，见 `licenses` 与字体目录的许可文件。App 图标采用用户提供的“掼蛋时光”鎏金宣传视觉（蓝色背景、金色立体字、蓝宝石金冠与三张扑克牌），缩放为 256×256 后内嵌于 NSP，不与腾讯任何资产共用。
 
 ## 可复现发布
 
-`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.4.1/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建 v0.4.1 预发布，保留历史 Releases。
+`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.5.0/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建 v0.5.0 预发布，保留历史 Releases。
 
-如需原生 NSP：将自己用于构建的 keys 内容配置为仓库 Actions secret `NSP_KEYS`，工作流会调用锁定版本的 hacbrewpack，在内存中使用该输入，不将其写入仓库或发行包。没有该输入时仅发布可验证的独立 NRO 和源码包，不复用历史 NSP。
+如需自行构建原生 NSP，可在本地将自己的 prod.keys 内容读入 `NSP_KEYS` 环境变量，运行 `node tools/packaging/build_nsp.mjs`。构建器使用标准 AES-CTR 加密 NCA 主体并核对解密后的原生程序、NPDM、图标、版本和全部素材；输入仅在内存中使用。GitHub 发布流程不接收密钥，只还原并核对已打包文件的分片和散列。
 
-本版 NSP 的本地打包使用调用者提供的 `prod.keys`。这是独立 homebrew，不使用商业游戏的 title keys。`release/v0.4.1/` 仅保存已打包的 NSP 分片和校验信息，不含密钥；可运行 `python3 tools/restore_native_nsp.py` 还原到 `dist/GuandanTime.nsp`。发行包中的 `BUILD-SOURCE-COMMIT.txt` 标识原生编译的源码提交，`SOURCE-COMMIT.txt` 标识包含文档和截图的打包提交。
+本版 NSP 的本地打包使用调用者提供的 `prod.keys`。这是独立 homebrew，不使用商业游戏的 title keys。`release/v0.5.0/` 仅保存已打包的 NSP 分片和校验信息，不含密钥；可运行 `python3 tools/restore_native_nsp.py` 还原到 `dist/GuandanTime.nsp`。发行包中的 `BUILD-SOURCE-COMMIT.txt` 标识原生编译的源码提交，`SOURCE-COMMIT.txt` 标识包含文档和截图的打包提交。
+
+默认发牌采用智能分列。点击“恢复”后仍为竖向点数分列，按 R 可再次智能理牌；桌面可用 C 恢复、F 切换花色、G 查找同花顺、K 展开记牌器。平铺仅作为调试截图状态，不作为默认发牌方式。
