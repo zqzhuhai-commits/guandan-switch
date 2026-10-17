@@ -31,7 +31,10 @@ jobs:
             cp GuandanSwitch.nro dist/GuandanSwitch.nro
             elf2nso GuandanSwitch.elf dist/native/main
             npdmtool config.json dist/native/main.npdm
-            nacptool --create "掼蛋时光" "Independent Homebrew" "0.4.1" dist/native/control.nacp --titleid=010000abcd000000
+            nacptool --create "GuandanTime" "Independent Homebrew" "0.4.1" dist/native/control.nacp --titleid=010000abcd000000
+            # 用原生工具构建romfs和NSP
+            romfsBuild romfs dist/romfs.bin
+            nspbuild --nso=dist/native/main --npdm=dist/native/main.npdm --nacp=dist/native/control.nacp --icon=icon.jpg --romfs=dist/romfs.bin --nsp=dist/GuandanTime-native.nsp
           '
           python3 tools/verify_nro.py dist/GuandanSwitch.nro
       - uses: actions/upload-artifact@v4
