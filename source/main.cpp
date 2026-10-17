@@ -494,9 +494,7 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
 #ifdef __SWITCH__
  {Result r=romfsInit();if(R_FAILED(r))fontPath="";}
  padConfigureInput(1,HidNpadStyleSet_NpadStandard);
-#endif
  static PadState pad;
-#ifdef __SWITCH__
  padInitializeDefault(&pad);
 #endif
  // 第三步：绿色屏幕 - 证明romfs和手柄已初始化
