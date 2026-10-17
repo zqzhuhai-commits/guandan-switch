@@ -267,7 +267,7 @@ std::vector<HandPos> organizedPositions(){
  int ng=groupStart.size();groupStart.push_back(n);
  int cw=80,ch=118;
  int colStep=std::max(56,std::min(75,1120/std::max(1,ng)));
- int vStep=28;int totalW=(ng-1)*colStep+cw;int sx=(W-totalW)/2;int baseBottom=598;
+ int vStep=34;int totalW=(ng-1)*colStep+cw;int sx=(W-totalW)/2;int baseBottom=598;
  for(int gi=0;gi<ng;gi++){int st=groupStart[gi],en=groupStart[gi+1];
   for(int ci=st;ci<en;ci++){int layer=ci-st;pos[ci]={sx+gi*colStep,baseBottom-layer*vStep-ch,cw,ch};}}
  return pos;
@@ -301,9 +301,14 @@ void table(){
  for(int p=1;p<4;p++)if(!fin(p)&&game.hands[p].size()<=5)text("余 "+std::to_string(game.hands[p].size())+" 张！",p==1?96:p==2?790:1184,p==2?166:(game.mode==2?458:374),18,{255,180,106},true);
  int n=game.hands[0].size();
  if(organized&&n>0){auto pos=organizedPositions();
-  for(int i=0;i<n;i++){int id=game.hands[0][i];int x=pos[i].x,y=pos[i].y;
-   if(selected[id])y-=18;bool focused=i==cursor&&game.turn==0&&!autoplay&&!game.over;
-   cardFace(id,x,y,pos[i].w,pos[i].h,selected[id],focused);}
+  std::vector<int>gs;int cr=-1;
+  for(int i=0;i<n;i++){int r=Card{game.hands[0][i]}.rank();if(r!=cr){gs.push_back(i);cr=r;}}
+  gs.push_back(n);
+  for(int gi=0;gi<(int)gs.size()-1;gi++){
+   for(int ci=gs[gi+1]-1;ci>=gs[gi];ci--){
+    int id=game.hands[0][ci];int x=pos[ci].x,y=pos[ci].y;
+    if(selected[id])y-=18;bool focused=ci==cursor&&game.turn==0&&!autoplay&&!game.over;
+    cardFace(id,x,y,pos[ci].w,pos[ci].h,selected[id],focused);}}
  }else{int step=std::min(58,1138/std::max(1,n-1)),x=(W-(step*std::max(0,n-1)+66))/2;
   for(int i=0;i<n;i++)cardFace(game.hands[0][i],x+i*step,513,66,104,selected[game.hands[0][i]],i==cursor&&game.turn==0&&!autoplay&&!game.over);}
  if(game.mode==2)text("明牌练习 · 其余三家手牌可见",640,502,15,{207,221,204,130},true);
@@ -389,8 +394,13 @@ void click(int x,int y){
  for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){act(acts[i]);return;}
  if(game.turn==0&&!autoplay){
   if(organized){auto pos=organizedPositions();int n=game.hands[0].size();
-   for(int i=n-1;i>=0;i--){int id=game.hands[0][i];int yy=pos[i].y-(selected[id]?18:0);
-    if(x>=pos[i].x&&x<pos[i].x+pos[i].w&&y>=yy&&y<yy+pos[i].h){cursor=i;act(CONFIRM);return;}}}
+   std::vector<int>gs;int cr=-1;
+   for(int i=0;i<n;i++){int r=Card{game.hands[0][i]}.rank();if(r!=cr){gs.push_back(i);cr=r;}}
+   gs.push_back(n);
+   for(int gi=(int)gs.size()-2;gi>=0;gi--){
+    for(int ci=gs[gi];ci<gs[gi+1];ci++){
+     int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
+     if(x>=pos[ci].x&&x<pos[ci].x+pos[ci].w&&y>=yy&&y<yy+pos[ci].h){cursor=ci;act(CONFIRM);return;}}}}
   else{int n=game.hands[0].size(),step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
    for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
     if(x>=xx+i*step&&x<xx+i*step+66&&y>=yy&&y<yy+104){cursor=i;act(CONFIRM);return;}}}}
