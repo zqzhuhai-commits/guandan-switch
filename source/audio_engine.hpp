@@ -13,9 +13,9 @@ class AudioEngine {
  struct Voice {double frequency=0,phase=0;int age=0,duration=0,delay=0;double gain=0;bool noise=false;uint32_t random=0x51f15e;};
  std::array<Voice,12> voices{};
  std::vector<int16_t> music,speechPcm;
- std::array<std::pair<size_t,size_t>,speech::COUNT> speechRanges{};size_t speechFrame=0,speechEnd=0;int speechPriority=0,speechVolume=80;
+ std::array<std::pair<size_t,size_t>,speech::COUNT> speechRanges{};size_t speechFrame=0,speechEnd=0;int speechPriority=0,speechVolume=100;
  size_t musicFrame=0;uint64_t renderedFrames=0;
- bool master=true,suspended=false;int musicVolume=40,effectVolume=80;
+ bool master=true,suspended=false;int musicVolume=100,effectVolume=100;
  static void callback(void*user,Uint8*stream,int bytes){static_cast<AudioEngine*>(user)->render(reinterpret_cast<int16_t*>(stream),bytes/4);}
  void lock(){if(device)SDL_LockAudioDevice(device);}void unlock(){if(device)SDL_UnlockAudioDevice(device);}
  void tone(double frequency,int ms,double gain,int delay=0,bool noise=false){
@@ -58,7 +58,7 @@ public:
   const char*name=SDL_GetCurrentAudioDriver();driver=name?name:"unknown";error.clear();SDL_PauseAudioDevice(device,0);return true;
  }
  void close(){if(device){SDL_CloseAudioDevice(device);device=0;}}
- void configure(bool enabled,int bgm,int sfx,int speech=80){lock();master=enabled;musicVolume=std::clamp(bgm,0,100);effectVolume=std::clamp(sfx,0,100);speechVolume=std::clamp(speech,0,100);if(!enabled||!speechVolume)speechFrame=speechEnd;unlock();}
+ void configure(bool enabled,int bgm,int sfx,int speech=100){lock();master=enabled;musicVolume=std::clamp(bgm,0,100);effectVolume=std::clamp(sfx,0,100);speechVolume=std::clamp(speech,0,100);if(!enabled||!speechVolume)speechFrame=speechEnd;unlock();}
  void suspend(bool value){lock();suspended=value;unlock();}
  bool hasMusic()const{return !music.empty();}
  uint64_t frameCount(){lock();auto n=renderedFrames;unlock();return n;}

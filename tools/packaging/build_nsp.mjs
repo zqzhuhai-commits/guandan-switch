@@ -3,7 +3,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { buildNsp } from '@tootallnate/hacbrewpack';
+import { buildNsp } from './versioned-builder.mjs';
 import { initializeKeySet, parseNca } from '@tootallnate/nca';
 import { decode } from '@tootallnate/romfs';
 
@@ -13,18 +13,25 @@ if (!input) throw new Error('NSP_KEYS must contain the caller-provided build key
 const bin = async p => new Uint8Array(await readFile(resolve(root, p)));
 const digest = b => createHash('sha256').update(b).digest('hex');
 const blobDigest = async b => digest(Buffer.from(await b.arrayBuffer()));
-const main = await bin('dist/native/main');
+const forwarder = process.argv.includes('--forwarder');
+const folder = forwarder ? 'dist/forwarder/' : 'dist/native/';
+const titleId = forwarder ? '010000abcd001000' : '010000abcd000000';
+const main = await bin(folder + 'main');
 assert.equal(Buffer.from(main.subarray(0, 4)).toString(), 'NSO0');
 const romfs = {};
-for (const f of await readdir(resolve(root, 'romfs'))) {
-  if (!f.endsWith('.gz')) romfs[f] = new Blob([await bin('romfs/' + f)]);
+if (forwarder) {
+  const path = 'sdmc:/switch/GuandanSwitch/GuandanSwitch.nro';
+  romfs.nextNroPath = new Blob([path]); romfs.nextArgv = new Blob([path]);
+  romfs['target-version.txt'] = new Blob(['GuandanSwitch v0.5.2 external NRO\n']);
+} else for (const f of await readdir(resolve(root, 'romfs'))) {
+  if (!f.endsWith('.gz') && !f.startsWith('.')) romfs[f] = new Blob([await bin('romfs/' + f)]);
 }
-const nacp = await bin('dist/native/control.nacp');
+const nacp = await bin(folder + 'control.nacp');
 const keys = await initializeKeySet(input, globalThis.crypto, 1);
 const result = await buildNsp({
   keys, plaintext: false, noLogo: true, noPatchNacpLogo: true,
-  titleId: '010000abcd000000',
-  exefs: new Map([['main', main], ['main.npdm', await bin('dist/native/main.npdm')]]),
+  titleId, titleVersion: 0x00050200,
+  exefs: new Map([['main', main], ['main.npdm', await bin(folder + 'main.npdm')]]),
   control: new Map([['control.nacp', nacp], ['icon_AmericanEnglish.dat', await bin('icon.jpg')]]),
   romfs,
 });
@@ -57,7 +64,7 @@ for (const [name, nca] of files) {
   const hash = digest(nca);
   assert.ok(name.startsWith(hash.slice(0, 32)), 'NCA content hash mismatch');
   const parsed = await parseNca(new Blob([nca]), { keys });
-  assert.equal(parsed.titleId, 0x010000abcd000000n);
+  assert.equal(parsed.titleId, BigInt("0x" + titleId));
   assert.equal(parsed.ncaSize, BigInt(nca.length));
   assert.ok(parsed.sections.every(s => s.cryptType === 3), 'NCA bodies must use standard AES-CTR encryption');
   assert.equal(parsed.hasRightsId, false, 'Homebrew must not require title keys/tickets');
@@ -67,7 +74,7 @@ for (const [name, nca] of files) {
     assert.equal(digest(exe.get('main')), digest(main), 'NSO must match this native build');
     const npdm = exe.get('main.npdm');
     assert.equal(npdm.toString('ascii', 0, 4), 'META');
-    assert.equal(npdm.readBigUInt64LE(npdm.readUInt32LE(0x70) + 0x10), 0x010000abcd000000n);
+    assert.equal(npdm.readBigUInt64LE(npdm.readUInt32LE(0x70) + 0x10), BigInt("0x" + titleId));
     assert.equal(npdm[0x0e], 44, 'Application thread priority');
     assert.equal(npdm[0x0f], 0, 'Application default CPU');
     const acidFlags = npdm.readUInt32LE(npdm.readUInt32LE(0x78) + 0x20c);
@@ -88,8 +95,9 @@ for (const [name, nca] of files) {
     cnmt = [...meta.values()][0];
   }
 }
-assert.equal(cnmt.readBigUInt64LE(0), 0x010000abcd000000n);
+assert.equal(cnmt.readBigUInt64LE(0), BigInt("0x" + titleId));
 assert.equal(cnmt.readUInt16LE(0x10), 2);
+assert.equal(cnmt.readUInt32LE(8), 0x00050200, 'Installer metadata must identify this newer version');
 const start = 0x20 + cnmt.readUInt16LE(0x0e);
 for (let i = 0; i < 2; i++) {
   const pos = start + 0x38 * i;
@@ -99,6 +107,7 @@ for (let i = 0; i < 2; i++) {
   assert.equal(record.size, cnmt.readUIntLE(pos + 0x30, 6));
   assert.equal(cnmt[pos + 0x36], record.type === 0 ? 1 : 3);
 }
-await writeFile(resolve(root, 'dist/GuandanTime.nsp'), bytes);
+await writeFile(resolve(root, forwarder ? 'dist/GuandanTime-Forwarder.nsp' : 'dist/GuandanTime.nsp'), bytes);
 console.log('PASS: NSP container, all NCA hashes, title ID, NSO, NPDM, NACP, icon, all RomFS assets and CNMT references');
-console.log('NSP SHA256:', digest(bytes));
+console.log(forwarder ? 'Forwarder NSP SHA256:' : 'Native NSP SHA256:', digest(bytes));
+console.log('CNMT application version:', cnmt.readUInt32LE(8));

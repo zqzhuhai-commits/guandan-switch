@@ -50,7 +50,16 @@ int main(){
  act(FLUSH_FIND);assert(selection().size()==5);assert(identify(selection(),2).kind==FLUSH);assert(game.history.empty());
  // Sound settings persist independent volumes and the diagnostics menu is reachable.
  start(0,124);act(PAUSE);focus=2;act(CONFIRM);assert(modal==2);focus=6;musicVolume=40;act(RIGHT);assert(musicVolume==50);act(LEFT);assert(musicVolume==40);act(CONFIRM);assert(musicVolume==50);
- click(600,164+7*45+20);assert(focus==7&&sfxVolume==90);focus=8;voiceVolume=80;act(LEFT);assert(voiceVolume==70);act(RIGHT);assert(voiceVolume==80);act(BACK);act(PAUSE);focus=4;act(CONFIRM);assert(modal==11);act(BACK);assert(!modal);
+ sfxVolume=80;click(600,164+7*45+20);assert(focus==7&&sfxVolume==90);focus=8;voiceVolume=80;act(LEFT);assert(voiceVolume==70);act(RIGHT);assert(voiceVolume==80);act(BACK);act(PAUSE);focus=4;act(CONFIRM);assert(modal==11);act(BACK);assert(!modal);
+ // No legal response: one hint advances the real game via pass, with no lost hand cards.
+ start(0,125);game.hands[0]={4};game.level=2;game.turn=0;game.last=1;game.table=identify({48},2);resetHints();
+ auto beforeHand=game.hands[0];size_t beforeHistory=game.history.size();doHint();
+ assert(game.passed[0]&&game.turn!=0&&game.hands[0]==beforeHand&&game.history.size()==beforeHistory+1);
+ // A free lead must never pass on hint.
+ start(0,126);game.turn=0;game.table={};beforeHistory=game.history.size();doHint();assert(game.history.size()==beforeHistory&&!selection().empty());
+ // Upgrade preferences once to 100%; a later player change is preserved.
+ gd::atomicTextFile(base+"profile.txt","0 0 0 1 1 0 1 1 1 40 80 80\n");loadProfile();assert(sound&&musicVolume==100&&sfxVolume==100&&voiceVolume==100);
+ musicVolume=30;saveStats();musicVolume=100;loadProfile();assert(musicVolume==30&&voiceVolume==100);
  // Remaining rendering is covered by real screenshot capture.
  std::remove((base+"session.dat").c_str());std::remove((base+"profile.txt").c_str());SDL_Quit();
  std::cout<<"PASS: mode setup, touch actions, hint cycling, legal play, nested pause clock, history paging, result navigation\n";

@@ -27,6 +27,7 @@ using namespace gd;
 
 static constexpr int W=1280,H=720;
 static SDL_Renderer*ren=nullptr;static SDL_Window*window=nullptr;
+static SDL_Texture*themeTex[3]={nullptr,nullptr,nullptr};
 static SDL_Texture*avTex[4]={nullptr,nullptr,nullptr,nullptr};static SDL_Texture*bgTex[3]={nullptr,nullptr,nullptr};
 static std::map<int,TTF_Font*>fonts;
 struct TextTex{SDL_Texture*t;int w,h;};static std::map<std::string,TextTex>cache;
@@ -45,7 +46,7 @@ static std::vector<int> layoutHand;
 static int layoutLevel=0,layoutRound=0;static bool layoutSmart=false;
 static bool gestureActive=false,gestureValue=false;static bool gestureVisited[108]{};
 void computeOrganizedGroups();void ensureGroups();void restoreHand();
-static AudioEngine audioEngine;static int musicVolume=40,sfxVolume=80,voiceVolume=80;
+static AudioEngine audioEngine;static int musicVolume=100,sfxVolume=100,voiceVolume=100;
 static bool storageReady=false;static int storageErrno=0;static std::string storageError,storageOperation;
 static bool romfsReady=true;static Game game;static int screen=0,modal=0,focus=0,cursor=0;static bool selected[108]{};
 static Uint32 lastAI=0,toastUntil=0;static std::string toast;static int total=0,wins=0,bombs=0,statRound=-1;static bool hasSave=false;
@@ -110,14 +111,14 @@ void loadProfile(){
   std::ifstream f(base+"profile.txt"+suffix);int t,w,b,sk,sp,on,rec;
   if(!(f>>t>>w>>b>>sk>>sp>>on>>rec)||t<0||w<0||w>t||b<0||sk<0||sk>2||sp<0||sp>2||(on!=0&&on!=1)||(rec!=0&&rec!=1))continue;
   total=t;wins=w;bombs=b;skin=sk;speed=sp;sound=on!=0;recorder=rec!=0;
-  int diff=1,timer=1,music=40,fx=80,voice=80;if(f>>diff)game.difficulty=std::clamp(diff,0,2);if(f>>timer)timerOn=timer!=0;if(f>>music)musicVolume=std::clamp(music,0,100);if(f>>fx)sfxVolume=std::clamp(fx,0,100);if(f>>voice)voiceVolume=std::clamp(voice,0,100);
+  int diff=1,timer=1,music=100,fx=100,voice=100,settingsVersion=0;if(f>>diff)game.difficulty=std::clamp(diff,0,2);if(f>>timer)timerOn=timer!=0;if(f>>music)musicVolume=std::clamp(music,0,100);if(f>>fx)sfxVolume=std::clamp(fx,0,100);if(f>>voice)voiceVolume=std::clamp(voice,0,100);if(!(f>>settingsVersion)||settingsVersion<502){musicVolume=sfxVolume=voiceVolume=100;sound=true;}
   if(*suffix)bootLog("Recovered profile from backup");
   return;
  }
 }
 void saveStats(){
  if(!storageReady&&!prepareStorage())return;
- std::ostringstream f;f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn<<' '<<musicVolume<<' '<<sfxVolume<<' '<<voiceVolume<<'\n';
+ std::ostringstream f;f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn<<' '<<musicVolume<<' '<<sfxVolume<<' '<<voiceVolume<<' '<<502<<'\n';
  errno=0;if(!gd::atomicTextFile(base+"profile.txt",f.str()))storageFailure("write profile",errno);
 }
 void checkpoint(){
@@ -165,13 +166,13 @@ void loadAvatars(){
  stbi_image_free(atlas);
 }
 void loadBg(){
- const char*names[]={"bghome.png","bgtable.png","lobby-seaside.png"};
- for(int i=0;i<3;i++){
+ const char*names[]={"bghome.png","bgtable.png","lobby-seaside.png","theme-night-v052.png","theme-ocean-v052.png","theme-purple-v052.png"};
+ for(int i=0;i<6;i++){
   std::string p=fontPath.size()>6&&fontPath[5]==':'?std::string("romfs:/")+names[i]:std::string("romfs/")+names[i];
   int w=0,h=0,n=0;unsigned char*px=stbi_load(p.c_str(),&w,&h,&n,4);
   if(!px){fprintf(stderr,"Bg %s failed: %s\n",names[i],stbi_failure_reason());continue;}
   SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormatFrom(px,w,h,32,w*4,SDL_PIXELFORMAT_RGBA32);
-  if(sf){bgTex[i]=SDL_CreateTextureFromSurface(ren,sf);SDL_FreeSurface(sf);}
+  if(sf){SDL_Texture*t=SDL_CreateTextureFromSurface(ren,sf);if(i<3)bgTex[i]=t;else themeTex[i-3]=t;SDL_FreeSurface(sf);}
   stbi_image_free(px);
  }
 }
@@ -276,7 +277,7 @@ void homeButtons(){
 }
 void home(){
  bgHome();circle(82,46,23,GOLD);text("掼",82,28,26,{32,43,82},true);floatingText("掼蛋时光",120,23,31);
- floatingText("离线俱乐部",355,35,15,WHITE,true);
+ floatingText("离线俱乐部 · v0.5.2",365,35,15,WHITE,true);
  floatingText("累计对局  "+std::to_string(total),824,32,20);floatingText("我方胜率  "+(total?std::to_string(wins*100/total)+"%":"—"),1022,32,20,GOLD);
  floatingText("好牌好搭档，随时开一桌",484,127,27);floatingText("双副牌 · 逢人配",1088,137,15,GOLD,true);
  if(bgTex[2]){floatingText("好配合，就是好手气",247,517,23,WHITE,true);floatingText("掼蛋时光 · 离线俱乐部",247,550,16,GOLD,true);}
@@ -307,7 +308,7 @@ void table(){
  box(20,14,155,42,8,{255,250,226,245});text("本局打",33,21,22,{151,103,39});text(rankName(game.level),145,16,32,{157,77,26},true);
  int bombCount=0;for(const auto&r:game.history)if(r.move.explosive())bombCount++;
  box(185,14,146,42,8,{22,51,92,170});text("炸弹倍数",199,24,16,WHITE);text("×"+std::to_string(1<<std::min(bombCount,10)),297,19,24,GOLD,true);
- floatingText("第 "+std::to_string(game.round)+" 局",350,24,18,WHITE);
+ floatingText("第 "+std::to_string(game.round)+" 局 · v0.5.2",350,24,18,WHITE);
  pill(1048,14,108,42,"记牌器",false,true,18);pill(1170,14,90,42,"更多",false,true,18);
  time_t tmNow=std::time(nullptr);auto*local=std::localtime(&tmNow);char tmText[12]="";if(local)std::strftime(tmText,sizeof(tmText),"%H:%M",local);floatingText(tmText,1210,68,17,WHITE,true);
  floatingText("我方 "+rankName(game.levels[0])+"  :  对方 "+rankName(game.levels[1]),82,72,16,WHITE,true);
@@ -354,7 +355,7 @@ void overlay(){
  if(!modal)return;
  LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(210,84,860,548);
  if(modal==11){text("运行诊断",254,110,32,GOLD);text("数据目录："+base,254,176,18,CREAM);text(storageErrno?"存档错误："+storageOperation+" · errno "+std::to_string(storageErrno):"存档：目录已创建，最近一次写入成功",254,222,18,storageErrno?RED:CREAM);if(storageErrno)text(storageError.substr(0,72),254,252,17,MUTED);
- text(audioEngine.device?"音频：已连接 · "+audioEngine.driver:"音频错误："+audioEngine.error.substr(0,70),254,300,18,CREAM);text(audioEngine.hasMusic()?"背景音乐：已载入 24 秒循环音轨":"背景音乐："+audioEngine.musicError.substr(0,65),254,340,18,CREAM);text(std::string("总声音：")+(sound?"开启":"关闭")+" · 音乐 "+std::to_string(musicVolume)+"% · 音效 "+std::to_string(sfxVolume)+"% · 人声 "+std::to_string(voiceVolume)+"%",254,378,18,CREAM);text("ROMFS："+std::string(romfsReady?"已挂载":"挂载失败")+" · 人声："+(audioEngine.hasSpeech()?"已载入 37 条":audioEngine.speechError.substr(0,40)),254,415,18,MUTED);text("日志："+base+"boot.log",254,454,17,MUTED);button(290,520,300,"A 音频自检 / 重试",true);button(690,520,300,"重新检查存档目录");text("初始化失败时游戏会继续运行，不再因音频故障直接退出",640,590,16,MUTED,true);}
+ text(audioEngine.device?"音频：已连接 · "+audioEngine.driver:"音频错误："+audioEngine.error.substr(0,70),254,300,18,CREAM);text(audioEngine.hasMusic()?"背景音乐：已载入 32 秒轻快棋牌音轨":"背景音乐："+audioEngine.musicError.substr(0,65),254,340,18,CREAM);text(std::string("总声音：")+(sound?"开启":"关闭")+" · 音乐 "+std::to_string(musicVolume)+"% · 音效 "+std::to_string(sfxVolume)+"% · 人声 "+std::to_string(voiceVolume)+"%",254,378,18,CREAM);text("ROMFS："+std::string(romfsReady?"已挂载":"挂载失败")+" · 人声："+(audioEngine.hasSpeech()?"已载入 37 条":audioEngine.speechError.substr(0,40)),254,415,18,MUTED);text("日志："+base+"boot.log",254,454,17,MUTED);button(290,520,300,"A 音频自检 / 重试",true);button(690,520,300,"重新检查存档目录");text("初始化失败时游戏会继续运行，不再因音频故障直接退出",640,590,16,MUTED,true);}
  if(modal==10){int player=focus+1;text("明牌手牌 · "+playerName(player),254,116,32,GOLD);text(player==2?"你的队友":"对手",895,128,18,MUTED);auto hand=game.hands[player];for(int i=0;i<int(hand.size());i++)cardFace(hand[i],256+(i%14)*55,190+(i/14)*150,50,112,false,false);button(290,542,250,"← 上一家");button(740,542,250,"下一家 →");}
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","声音与游戏设置","玩法说明","运行诊断 / 音频自检"};for(int i=0;i<5;i++)button(340,188+i*76,600,items[i],focus==i);}
  if(modal==2){text("声音与游戏设置",254,112,30,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","总声音","记牌器","出牌倒计时","背景音乐音量","操作音效音量","对局人声音量"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"原色夜景":skin==1?"深海蓝":"午夜紫",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭",std::to_string(musicVolume)+"%",std::to_string(sfxVolume)+"%",std::to_string(voiceVolume)+"%"};for(int i=0;i<9;i++)choiceRow(315,164+i*45,650,labels[i],values[i],focus==i);text(audioEngine.device?"音频已连接 · A 切换，←→ 调节音量":"音频未连接 · 可在运行诊断中重试",640,580,16,MUTED,true);text("B 返回",960,600,16,MUTED);}
@@ -380,8 +381,9 @@ void overlay(){
 // ---------------- actions ----------------
 void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();cursor=std::min(cursor,int(game.hands[0].size())-1);lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
 void doHint(){if(game.turn!=0||game.over||autoplay)return;
+ if(game.table.kind!=NONE&&moves(game.hands[0],game.level,game.table).empty()){if(game.pass(0)){clearSelection();resetHints();lastAI=SDL_GetTicks();sfx(2);checkpoint();message("没有可出的牌，已自动不出");}return;}
  if(hintIndex<0||hintAction!=game.history.size()||hintSeed!=game.seed||hintRound!=game.round){hintOptions=moves(game.hands[0],game.level,game.table);std::stable_sort(hintOptions.begin(),hintOptions.end(),[](const Move&a,const Move&b){if(a.explosive()!=b.explosive())return !a.explosive();if(a.cards.size()!=b.cards.size())return a.cards.size()>b.cards.size();return a.high<b.high;});Move recommended=game.hint(0);if(recommended.kind==NONE&&game.table.kind!=NONE)hintOptions.insert(hintOptions.begin(),recommended);else{auto it=std::find_if(hintOptions.begin(),hintOptions.end(),[&](const Move&m){auto a=m.cards,b=recommended.cards;std::sort(a.begin(),a.end());std::sort(b.begin(),b.end());return a==b;});if(it!=hintOptions.end())std::rotate(hintOptions.begin(),it,it+1);}hintAction=game.history.size();hintSeed=game.seed;hintRound=game.round;hintIndex=-1;}
- clearSelection();if(hintOptions.empty()){message("没有可压过的牌，按 L 不出");return;}hintIndex=(hintIndex+1)%int(hintOptions.size());auto&m=hintOptions[hintIndex];for(int id:m.cards)selected[id]=true;message(std::to_string(hintIndex+1)+" / "+std::to_string(hintOptions.size())+" · "+(m.kind==NONE?std::string("建议不出，按 L 执行"):std::string(kindName(m.kind))+"，按 X 出牌")+" · Y 换一组");}
+ clearSelection();if(hintOptions.empty()){message("没有可用提示");return;}hintIndex=(hintIndex+1)%int(hintOptions.size());auto&m=hintOptions[hintIndex];for(int id:m.cards)selected[id]=true;message(std::to_string(hintIndex+1)+" / "+std::to_string(hintOptions.size())+" · "+(m.kind==NONE?std::string("建议不出，按 L 执行"):std::string(kindName(m.kind))+"，按 X 出牌")+" · Y 换一组");}
 void doAutoMove(){Move m=game.hint(0);if(m.kind==NONE){if(game.table.kind==NONE){auto ms=moves(game.hands[0],game.level);if(!ms.empty())game.play(0,ms.front().cards);}else game.pass(0);}else if(game.play(0,m.cards)&&m.explosive())bombs++;clearSelection();cursor=0;}
 enum Action{LEFT,RIGHT,UP,DOWN,CONFIRM,BACK,PLAY,HINT,PASS,SORT,AUTO,PAUSE,HELP,HISTORY,EMOTE,RESTORE,SUIT,FLUSH_FIND,COUNTER};
 void act(Action a){
@@ -458,9 +460,9 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
 #ifdef __SWITCH__
  base="sdmc:/switch/GuandanSwitch/";
  if(!fsdevGetDeviceFileSystem("sdmc")){Result mount=fsdevMountSdmc();if(R_FAILED(mount))fprintf(stderr,"SD mount failed: %08x\n",unsigned(mount));}
- prepareStorage();bootLog("v0.5.1 starting native application");Result romfsResult=romfsInit();romfsReady=R_SUCCEEDED(romfsResult);bootLog("romfs result="+std::to_string(romfsResult));fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
+ prepareStorage();bootLog("v0.5.2 starting native application");Result romfsResult=romfsInit();romfsReady=R_SUCCEEDED(romfsResult);bootLog("romfs result="+std::to_string(romfsResult));fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
 #else
- fontPath="romfs/font.otf";prepareStorage();bootLog("v0.5.1 starting desktop application");
+ fontPath="romfs/font.otf";prepareStorage();bootLog("v0.5.2 starting desktop application");
 #endif
  if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER)<0){bootLog(std::string("SDL video init failed: ")+SDL_GetError());return 1;}if(TTF_Init()<0){bootLog(std::string("Font subsystem failed: ")+TTF_GetError());return 1;}
  window=SDL_CreateWindow("掼蛋时光 | Guandan Switch",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE);
@@ -513,6 +515,7 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  SDL_RenderPresent(ren);frame++;SDL_Delay(16);
  }
  if(screen){checkpoint();}saveStats();for(auto&kv:cache)SDL_DestroyTexture(kv.second.t);for(auto&kv:fonts)TTF_CloseFont(kv.second);for(auto t:avTex){if(t)SDL_DestroyTexture(t);}
+ for(auto t:themeTex){if(t)SDL_DestroyTexture(t);}
  for(auto t:bgTex){if(t)SDL_DestroyTexture(t);}
  audioEngine.close();bootLog("clean shutdown");
  SDL_DestroyRenderer(ren);SDL_DestroyWindow(window);TTF_Quit();SDL_Quit();

@@ -47,36 +47,12 @@ void fillPolygon(std::initializer_list<SDL_Point> input,Col c){
  for(int y=std::max(0,ymin);y<=std::min(H-1,ymax);y++){std::vector<int>xs;for(size_t i=0;i<p.size();i++){auto a=p[i],b=p[(i+1)%p.size()];if((a.y<=y&&b.y>y)||(b.y<=y&&a.y>y))xs.push_back(a.x+(y-a.y)*(b.x-a.x)/(b.y-a.y));}std::sort(xs.begin(),xs.end());for(size_t i=1;i<xs.size();i+=2)SDL_RenderDrawLine(ren,xs[i-1],y,xs[i],y);}
 }
 void referenceScene(){
- const float time=SDL_GetTicks()/1000.0f;
- if(skin==0){
-  vgrad(0,0,W,H,{12,24,48},{22,67,58});
-  circle(1055,63,31,{255,224,156,24});circle(1055,63,22,{255,236,189});
-  for(int i=0;i<37;i++){int x=i*37,hh=24+(i*23)%72;rect(x,160-hh,30,hh,{13,27,44});for(int yy=167-hh;yy<155;yy+=11)for(int xx=x+5;xx<x+27;xx+=9)rect(xx,yy,3,5,{244,196,105,Uint8(90+i%4*35)});}
-  vgrad(0,160,W,50,{25,62,69},{19,43,47});
-  for(int i=0;i<26;i++)hline((i*151)%W,165+i*2,28+i%5*8,{244,194,105,35});
-  line(0,70,220,94,{192,146,80});line(1060,94,1280,70,{192,146,80});
-  for(int side:{0,1}){int x=side?1225:55;circle(x,103,29,{255,190,72,18});box(x-13,84,26,35,10,{223,128,46});hline(x-10,88,20,{255,218,124});line(x,120,x,133,{238,180,81});}
- }else if(skin==1){
-  vgrad(0,0,W,H,{5,24,65},{7,86,107});
-  for(int i=0;i<5;i++){int x=120+i*255;int drift=int(20*std::sin(time*.16f+i));fillPolygon({{x,0},{x+40,0},{x+220+drift,360},{x-160+drift,360}},{80,213,240,10});}
-  for(int i=0;i<27;i++){int x=(i*193+71)%W,y=20+(i*67)%180-int(std::fmod(time*(4+i%4),40));ring(x,y,3+i%6,1,{129,225,246,70});}
-  for(int i=0;i<8;i++){int x=(i*181+95)%W,y=98+i%3*23;fillPolygon({{x-10,y},{x+8,y-4},{x+8,y+4}},{46,131,160,145});fillPolygon({{x-10,y},{x-17,y-5},{x-17,y+5}},{46,131,160,145});}
-  for(int side:{0,1})for(int i=0;i<6;i++){int x=side?1260-i*13:20+i*13;for(int y=190;y>100+i*8;y-=8)line(x+int(8*std::sin(y*.04f+i)),y,x+int(8*std::sin((y-8)*.04f+i)),y-8,{16,107,125,170});}
- }else{
-  vgrad(0,0,W,H,{24,13,57},{85,46,111});
-  for(int i=0;i<65;i++){int x=(i*173+49)%W,y=10+(i*47)%157;Uint8 alpha=Uint8(115+65*std::sin(time*.6f+i));circle(x,y,i%7==0?2:1,{237,220,255,alpha});}
-  circle(1040,74,44,{199,169,249,18});circle(1040,74,31,{242,225,255});circle(1053,63,27,{29,17,63});
-  fillPolygon({{0,155},{94,107},{190,150},{306,97},{415,167},{0,221}},{53,35,89});
-  fillPolygon({{819,170},{923,113},{1015,157},{1134,100},{1280,151},{1280,221}},{60,37,99});
-  for(int side:{0,1}){int x=side?1234:46;rect(x-9,146,18,58,{37,25,67});circle(x,142,26,{111,68,143});circle(x-17,150,18,{90,53,126});}
- }
- Col frame=skin==0?Col{77,49,29}:skin==1?Col{16,45,77}:Col{51,30,76};
- Col trim=skin==0?Col{178,139,75}:skin==1?Col{107,178,203}:Col{182,145,211};
- Col felt=skin==0?Col{22,85,65}:skin==1?Col{20,76,128}:Col{83,48,119};
- fillPolygon({{159,177},{1121,177},{1452,720},{-172,720}},frame);
- fillPolygon({{172,186},{1108,186},{1424,720},{-144,720}},trim);
- fillPolygon({{182,192},{1098,192},{1400,720},{-120,720}},felt);
- for(int y=196;y<H;y+=4){int edge=182-(y-192)*302/528;hline(edge,y,W-2*edge,{255,255,255,4});}
+ const char*themeNames[]={"原色夜景","深海蓝","午夜紫"};
+ if(themeTex[skin]){SDL_Rect dst{0,0,W,H};SDL_RenderCopy(ren,themeTex[skin],nullptr,&dst);}
+ else vgrad(0,0,W,H,skins[skin].top,skins[skin].bot);
+ // Local, translucent gradients keep the full artwork visible; no solid header/footer.
+ for(int y=0;y<92;y++)rect(0,y,W,1,{8,14,29,Uint8(115*(92-y)/92)});
+ floatingText(std::string(themeNames[skin])+" · 新场景",790,24,15,WHITE);
  text("掼 蛋 时 光",640,213,35,{255,255,255,20},true);
  const char*mode[]={"休闲单局","经典升级","明牌练习","定局挑战"};text(std::string(mode[game.mode])+"  ·  对家组队",640,258,16,{255,255,255,34},true);
 }

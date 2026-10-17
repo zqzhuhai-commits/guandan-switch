@@ -1,8 +1,8 @@
-name: Build Switch v0.5.1
+name: Build Switch v0.5.2
 on:
   push:
     branches: [main, 'codex/reference-table-v05']
-    paths: ['source/**', 'tests/**', 'romfs/**', 'tools/**', 'Makefile', 'Makefile.desktop', 'config.json', '.github/workflows/publish.yml']
+    paths: ['source/**', 'tests/**', 'romfs/**', 'tools/**', 'Makefile', 'Makefile.desktop', 'config.json', 'forwarder/**', '.github/workflows/publish.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,13 +30,23 @@ jobs:
           docker run --rm -v "$PWD:/project" -w /project devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d bash -lc '
             export DEVKITPRO=/opt/devkitpro DEVKITA64=/opt/devkitpro/devkitA64
             export PATH=/opt/devkitpro/portlibs/switch/bin:/opt/devkitpro/tools/bin:/opt/devkitpro/devkitA64/bin:$PATH
-            make APP_JSON= APP_VERSION=0.5.1 -j2
+            make APP_JSON= APP_VERSION=0.5.2 -j2
             cp GuandanSwitch.nro dist/GuandanSwitch.nro
             elf2nso GuandanSwitch.elf dist/native/main
             npdmtool config.json dist/native/main.npdm
-            nacptool --create "掼蛋时光" "Independent Homebrew" "0.5.1" dist/native/control.nacp --titleid=010000abcd000000
+            nacptool --create "掼蛋时光" "Independent Homebrew" "0.5.2" dist/native/control.nacp --titleid=010000abcd000000
           '
           python3 tools/verify_nro.py dist/GuandanSwitch.nro
+          docker run --rm -v "$PWD:/project" -w /project/forwarder devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d bash -lc '
+            export DEVKITPRO=/opt/devkitpro DEVKITA64=/opt/devkitpro/devkitA64
+            export PATH=/opt/devkitpro/tools/bin:/opt/devkitpro/devkitA64/bin:$PATH
+            make -j2
+            mkdir -p ../dist/forwarder
+            elf2nso hbl.elf ../dist/forwarder/main
+            npdmtool hbl.json ../dist/forwarder/main.npdm
+            nacptool --create "掼蛋时光 NRO" "Independent Homebrew" "0.5.2" ../dist/forwarder/control.nacp --titleid=010000abcd001000
+          '
+          python3 tools/verify_process.py
       - uses: actions/upload-artifact@v4
         with:
           name: switch-native-build
