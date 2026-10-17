@@ -21,7 +21,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 # NO_NACP: if set to anything, no .nacp file is generated.
 APP_TITLE := Guandan Time
 APP_AUTHOR := Independent Homebrew
-APP_VERSION := 0.5.0
+APP_VERSION := 0.5.1
 # APP_TITLE is the name of the app stored in the .nacp file (Optional)
 # APP_AUTHOR is the author of the app stored in the .nacp file (Optional)
 # APP_VERSION is the version of the app stored in the .nacp file (Optional)

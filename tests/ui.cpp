@@ -48,6 +48,9 @@ int main(){
  // A genuine same-suit run can be selected by the bottom tool, with no auto-play.
  game.hands[0]={4,8,12,16,20};game.level=2;game.table={};suitFilter=-1;flushIndex=-1;clearSelection();
  act(FLUSH_FIND);assert(selection().size()==5);assert(identify(selection(),2).kind==FLUSH);assert(game.history.empty());
+ // Sound settings persist independent volumes and the diagnostics menu is reachable.
+ start(0,124);act(PAUSE);focus=2;act(CONFIRM);assert(modal==2);focus=6;musicVolume=40;act(RIGHT);assert(musicVolume==50);act(LEFT);assert(musicVolume==40);act(CONFIRM);assert(musicVolume==50);
+ click(600,164+7*51+20);assert(focus==7&&sfxVolume==90);act(BACK);act(PAUSE);focus=4;act(CONFIRM);assert(modal==11);act(BACK);assert(!modal);
  // Remaining rendering is covered by real screenshot capture.
  std::remove((base+"session.dat").c_str());std::remove((base+"profile.txt").c_str());SDL_Quit();
  std::cout<<"PASS: mode setup, touch actions, hint cycling, legal play, nested pause clock, history paging, result navigation\n";

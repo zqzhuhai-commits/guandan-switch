@@ -68,6 +68,11 @@ for (const [name, nca] of files) {
     const npdm = exe.get('main.npdm');
     assert.equal(npdm.toString('ascii', 0, 4), 'META');
     assert.equal(npdm.readBigUInt64LE(npdm.readUInt32LE(0x70) + 0x10), 0x010000abcd000000n);
+    assert.equal(npdm[0x0e], 44, 'Application thread priority');
+    assert.equal(npdm[0x0f], 0, 'Application default CPU');
+    const acidFlags = npdm.readUInt32LE(npdm.readUInt32LE(0x78) + 0x20c);
+    assert.equal(acidFlags & 1, 1, 'Retail application descriptor');
+    assert.equal((acidFlags >> 2) & 15, 0, 'Use application memory pool, not system pool');
     const assets = await decode(parsed.sections.find(s => s.romfsData).romfsData);
     for (const name of Object.keys(romfs)) {
       assert.ok(assets[name] && typeof assets[name].arrayBuffer === 'function', 'Missing embedded ' + name);

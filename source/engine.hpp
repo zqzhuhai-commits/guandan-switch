@@ -1,4 +1,5 @@
 #pragma once
+#include "storage.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -130,7 +131,7 @@ struct Game{
   auto vec=[&](const std::vector<int>&v){f<<v.size();for(int x:v)f<<' '<<x;f<<'\n';};for(auto&h:hands)vec(h);vec(finish);vec(previous);f<<int(table.kind)<<' '<<table.high<<'\n';vec(table.cards);
   f<<history.size()<<'\n';for(const auto&r:history){f<<r.player<<' '<<int(r.move.kind)<<' '<<r.move.high<<'\n';vec(r.move.cards);}
   f<<powerLog.size()<<'\n';for(size_t i=0;i<powerLog.size();i++){f<<powerLog[i]<<' '<<bombLog[i];for(int n:snapshots[i])f<<' '<<n;f<<'\n';}
-  f.close();if(!f)return false;return std::rename((path+".tmp").c_str(),path.c_str())==0;
+  f.close();if(!f)return false;return commitTemporaryFile(path);
  }
  bool load(const std::string&path){std::ifstream f(path);std::string magic;Game g;if(!(f>>magic)||(magic!="GD3"&&magic!="GD4"&&magic!="GD5"))return false;f>>g.seed>>g.round>>g.mode>>g.difficulty>>g.level>>g.levels[0]>>g.levels[1]>>g.turn>>g.last>>g.passes>>g.first>>g.over>>g.champion;
   if(magic!="GD3"){for(int r=2;r<=17;r++){int v;if(!(f>>v)||v<0||v>16){f.setstate(std::ios::failbit);return false;}g.used[r]=v;}}
