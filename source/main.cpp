@@ -478,11 +478,6 @@ void click(int x,int y){
     if(x>=xx+i*step&&x<xx+i*step+66&&y>=yy&&y<yy+104){cursor=i;act(CONFIRM);return;}}}}
 }
 int main(int argc,char**argv){
-#ifdef __SWITCH__
- // 【诊断】用原生framebuffer渲染亮红色，完全绕过SDL，确认程序是否进入main()
- Framebuffer fb;framebufferCreate(&fb,nwindowGetDefault(),1280,720,PIXEL_FORMAT_RGBA_8888,2);framebufferMakeLinear(&fb);
- u32* buf=(u32*)framebufferBegin(&fb,nullptr);if(buf){for(int i=0;i<1280*720;i++)buf[i]=0xFFFF0000;framebufferEnd(&fb);}
-#endif
  bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
  for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
