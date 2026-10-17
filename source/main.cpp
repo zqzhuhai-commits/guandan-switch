@@ -532,17 +532,18 @@ int main(int argc,char**argv){
   if(e.type==SDL_MOUSEBUTTONDOWN&&e.button.which!=SDL_TOUCH_MOUSEID){float mx,my;SDL_RenderWindowToLogical(ren,e.button.x,e.button.y,&mx,&my);click(int(mx),int(my));}if(e.type==SDL_FINGERDOWN)click(int(e.tfinger.x*W),int(e.tfinger.y*H));
   // 长按滑动多选：手指滑动经过的牌自动选中
   if(e.type==SDL_FINGERMOTION&&screen&&!modal&&game.turn==0&&!autoplay&&!game.over){
-   int sx=int(e.tfinger.x*W),sy=int(e.tfinger.y*H);int n=game.hands[0].size();
+   int sx=int(e.tfinger.x*W),sy=int(e.tfinger.y*H);int n=game.hands[0].size();bool hit=false;
    if(organized){auto pos=organizedPositions();
-    for(int gi=(int)orgGroupStart.size()-2;gi>=0;gi--){
-     for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1];ci++){
+    for(int gi=(int)orgGroupStart.size()-2;gi>=0&&!hit;gi--){
+     for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1]&&!hit;ci++){
       int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
       if(sx>=pos[ci].x&&sx<pos[ci].x+pos[ci].w&&sy>=yy&&sy<yy+pos[ci].h){
-       if(!selected[id]){selected[id]=true;sfx(0);}cursor=ci;return;}}}}
-   else{int step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
-    for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
+       if(!selected[id]){selected[id]=true;sfx(0);}cursor=ci;hit=true;}}}
+   }else{int step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
+    for(int i=n-1;i>=0&&!hit;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
      if(sx>=xx+i*step&&sx<xx+i*step+66&&sy>=yy&&sy<yy+104){
-      int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;return;}}}}
+      int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;hit=true;}}}
+  }
  Uint32 now=SDL_GetTicks();
  if(screen&&!modal){
   for(int p=0;p<4;p++){Move cur=game.shown[p];Move old=lastShown[p];
