@@ -369,7 +369,7 @@ void table(){
  drawAvatar(0,260,452,30,game.turn==0&&!game.over&&!autoplay,game.passed[0],fin(0));
  text("你 · "+std::to_string(game.hands[0].size())+" 张",296,442,17,CREAM);
  if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0){float el=float(now-lastAI)/float(TURN_MS);if(el<1){arc(197,452,23,4,-1.57f,-1.57f+6.2832f*el,GOLD);text(std::to_string(std::max(0,int((TURN_MS-(now-lastAI))/1000))),197,443,17,GOLD,true);}}
- auto chosen=selection();Move preview=identify(chosen,game.level,game.table);if(!chosen.empty()){std::string label="已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"无法出牌":std::string(kindName(preview.kind)));text(label,640,478,17,preview.kind==NONE?Col{255,151,151}:GOLD,true);}
+ auto chosen=selection();Move preview=identify(chosen,game.level,game.table);if(!chosen.empty()){std::string label="已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"无法出牌":std::string(kindName(preview.kind)));text(label,540,478,17,preview.kind==NONE?Col{255,151,151}:GOLD,true);btn(730,466,100,"✕ 清空",my,false);}
  for(int p=1;p<4;p++)if(!fin(p)&&game.hands[p].size()<=5)text("余 "+std::to_string(game.hands[p].size())+" 张！",p==1?96:p==2?790:1184,p==2?166:(game.mode==2?458:374),18,{255,180,106},true);
  int n=game.hands[0].size();
  if(organized&&n>0){auto pos=organizedPositions();
@@ -484,6 +484,7 @@ void click(int x,int y){
  if(game.over){if(Area{380,426,185,60}.contains(x,y))act(CONFIRM);else if(Area{570,426,155,60}.contains(x,y))act(BACK);else if(Area{730,426,170,60}.contains(x,y))act(HISTORY);return;}if(Area{1040,14,114,34}.contains(x,y)){act(HISTORY);return;}if(x>1140&&y<66){act(PAUSE);return;}
  struct BtnGeom{int x,y,w;}bs[6]={{210,630,140},{360,630,140},{510,630,180},{700,630,120},{830,630,150},{990,630,120}};Action acts[6]={PASS,HINT,PLAY,SORT,AUTO,EMOTE};
  for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){act(acts[i]);return;}
+ if(Area{730,466,100,28}.contains(x,y)){clearSelection();return;}
  if(game.turn==0&&!autoplay){
   if(organized){auto pos=organizedPositions();int n=game.hands[0].size();
    for(int gi=(int)orgGroupStart.size()-2;gi>=0;gi--){
