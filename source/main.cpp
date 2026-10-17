@@ -544,6 +544,7 @@ int main(int argc,char**argv){
      if(sx>=xx+i*step&&sx<xx+i*step+66&&sy>=yy&&sy<yy+104){
       int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;hit=true;}}}
   }
+ }
  Uint32 now=SDL_GetTicks();
  if(screen&&!modal){
   for(int p=0;p<4;p++){Move cur=game.shown[p];Move old=lastShown[p];
