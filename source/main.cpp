@@ -317,11 +317,12 @@ void table(){
   for(int i=0;i<4;i++)text(std::to_string(i+1)+"  "+playerName(game.finish[i])+(game.finish[i]%2==0?"  ★":""),440+(i%2)*215,285+(i/2)*38,19,game.finish[i]%2==0?GOLD:MUTED);
   text(game.mode!=1?"单局结束 · 下一局重新发牌":game.champion?"成功过 A · 新赛季开启！":"获胜方升 "+std::to_string(teamUp)+" 级",640,396,18,{207,221,204},true);
   button(395,428,165,game.champion?"A 新赛季":"A 下一局",true);button(580,428,135,"B 大厅");button(735,428,150,"ZL 复盘");}
- if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
+ if(now<toastUntil){box(340,218,600,38,16,{10,22,16,238});text(toast,640,224,17,GOLD,true);}
 }
 void overlay(){
  if(!modal)return;
  LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(210,84,860,548);
+ if(modal==10){int player=focus+1;text("明牌手牌 · "+playerName(player),254,116,32,GOLD);text(player==2?"你的队友":"对手",895,128,18,MUTED);auto hand=game.hands[player];for(int i=0;i<int(hand.size());i++)cardFace(hand[i],256+(i%14)*55,190+(i/14)*150,50,112,false,false);button(290,542,250,"← 上一家");button(740,542,250,"下一家 →");}
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","偏好设置","玩法说明"};for(int i=0;i<4;i++)button(340,196+i*80,600,items[i],focus==i);}
  if(modal==2){text("偏好设置",254,116,34,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","操作音效","记牌器","出牌倒计时"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"原色夜景":skin==1?"深海蓝":"午夜紫",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭"};for(int i=0;i<6;i++)choiceRow(315,180+i*70,650,labels[i],values[i],focus==i);text("A 切换选项   B 返回",640,600,17,MUTED,true);}
  if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","↑↓ 选层，←→ 换列，A 选牌，X 出牌，B 清选，Y 提示。","R 一键理牌，RS 恢复按点数，LS 花色，L 不出，ZR 托管。","点按牌型标签可整组选择；滑动多选；底部可查找同花顺。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
@@ -353,6 +354,7 @@ void act(Action a){
  if(modal){
   if(a==BACK||a==PAUSE){setModal(0);focus=0;sfx(2);return;}
   int max=modal==1?4:modal==2?6:modal==6?8:modal==8?4:1;
+  if(modal==10){if(a==LEFT||a==UP)focus=(focus+2)%3;if(a==RIGHT||a==DOWN)focus=(focus+1)%3;return;}
   if(modal==5){int pages=std::max(1,(int(game.history.size())+4)/5);if(a==LEFT||a==UP)historyPage=std::min(pages-1,historyPage+1);if(a==RIGHT||a==DOWN)historyPage=std::max(0,historyPage-1);return;}
   if(modal==6){if(a==LEFT||a==UP)focus=(focus+7)%8;if(a==RIGHT||a==DOWN)focus=(focus+1)%8;}
   else{if(a==UP)focus=(focus+max-1)%max;if(a==DOWN)focus=(focus+1)%max;}
@@ -391,6 +393,7 @@ void act(Action a){
 void click(int x,int y){
  if(modal){
   if(Area{945,96,112,54}.contains(x,y)){act(BACK);return;}
+  if(modal==10){if(Area{290,542,250,48}.contains(x,y))act(LEFT);if(Area{740,542,250,48}.contains(x,y))act(RIGHT);return;}
   if(modal==5){if(Area{290,562,250,48}.contains(x,y))act(LEFT);else if(Area{740,562,250,48}.contains(x,y))act(RIGHT);return;}
   int count=modal==1?4:modal==2?6:modal==8?4:modal==6?8:0;
   for(int i=0;i<count;i++){
@@ -401,6 +404,7 @@ void click(int x,int y){
  }
  if(!screen){for(int i=0;i<4;i++){if(modeAreas[i].contains(x,y)){focus=i;act(CONFIRM);return;}}for(int i=0;i<4;i++)if(navAreas[i].contains(x,y)){focus=i+4;act(CONFIRM);return;}return;}
  if(game.over){if(Area{380,426,185,60}.contains(x,y))act(CONFIRM);else if(Area{570,426,155,60}.contains(x,y))act(BACK);else if(Area{730,426,170,60}.contains(x,y))act(HISTORY);return;}if(Area{1048,14,108,42}.contains(x,y)){act(COUNTER);return;}if(Area{1170,14,90,42}.contains(x,y)){act(PAUSE);return;}
+ if(game.mode==2){const Area seats[]={{20,194,105,130},{421,50,78,125},{1155,194,110,130}};for(int i=0;i<3;i++)if(seats[i].contains(x,y)){setModal(10);focus=i;return;}}
  const Area mainButtons[]={{445,266,125,46},{586,266,125,46},{728,266,150,46},{894,266,94,46}};
  const Action mainActions[]={PASS,HINT,PLAY,BACK};
  if(game.turn==0&&!autoplay)for(int i=0;i<4;i++)if(mainButtons[i].contains(x,y)){act(mainActions[i]);return;}
@@ -413,7 +417,7 @@ void click(int x,int y){
 
 }
 int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int layoutCapture=0;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
- for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-restored"){layoutCapture=1;s="--capture-game";}if(s=="--capture-selected"){layoutCapture=2;s="--capture-game";}if(s=="--capture-counter"){layoutCapture=3;s="--capture-game";}if(s=="--capture-flat"){layoutCapture=4;s="--capture-game";}if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture-game";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
+ for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-restored"){layoutCapture=1;s="--capture-game";}if(s=="--capture-selected"){layoutCapture=2;s="--capture-game";}if(s=="--capture-counter"){layoutCapture=3;s="--capture-game";}if(s=="--capture-flat"){layoutCapture=4;s="--capture-game";}if(s=="--capture-training-zoom"){captureModal=10;captureMode=2;s="--capture-game";}if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture-game";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
  romfsInit();base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
 #else
@@ -459,7 +463,7 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  if(smoke){if(frame==1){act(HELP);act(BACK);act(HINT);act(PLAY);}if(frame==2){act(PAUSE);act(BACK);act(AUTO);}if(frame>20)quit=true;}
  if(reviewMode&&game.over&&!modal&&frame>10)modal=7;
  trimCache();if(screen)table();else{home();homeButtons();}overlay();clearFx(now);
- if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
+ if(now<toastUntil){box(340,218,600,38,16,{10,22,16,238});text(toast,640,224,17,GOLD,true);}
  if((capture&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10&&!reviewMode)||(reviewMode&&game.over&&modal==7&&frame>18)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
  SDL_RenderPresent(ren);frame++;SDL_Delay(16);
  }

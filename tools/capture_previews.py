@@ -12,7 +12,7 @@ SCREENS = {'home':'--capture', 'game':'--capture-game', 'training':'--capture-tr
            'over':'--capture-over', 'review':'--capture-review',
            'pause':'--capture-pause', 'stats':'--capture-stats',
            'restored':'--capture-restored', 'selected':'--capture-selected',
-           'counter':'--capture-counter', 'flat':'--capture-flat'}
+           'counter':'--capture-counter', 'flat':'--capture-flat', 'training-zoom':'--capture-training-zoom'}
 with TemporaryDirectory(prefix='guandan-preview-') as tmp:
     env = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
     for name, flag in SCREENS.items():
