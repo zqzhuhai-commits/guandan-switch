@@ -1,6 +1,6 @@
-# 掼蛋时光 · Switch 原生单机版
+# 掼蛋时光语音版 · Switch 原生单机版
 
-当前版本：**v0.5.2 测试版**。本版继续排查独立 NSP 闪退，增加真正的 NRO 转发 NSP，并替换三套完整主题背景。尚未进行实体设备启动验证。
+当前版本：**v0.5.2 正式版 · 掼蛋时光语音版**。用户已确认本版运行正常，现正式发布。提供独立 NSP、NRO 转发 NSP 和独立 NRO，包含 37 条离线语音、原创音乐、局内动效与三套全屏主题。
 
 [下载独立 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanTime.nsp) · [下载 NRO 转发 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanTime-Forwarder.nsp) · [下载配套 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanSwitch.nro) · [完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanSwitch-v0.5.2.zip) · [校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/SHA256SUMS.txt)
 
@@ -19,7 +19,7 @@
 
 - 独立 NSP 补齐 `application_type=1` 能力描述，采用应用 CPU、服务权限及 8 MiB 主线程栈；构建后检查实际 NPDM，另外检查转发器 NPDM。
 - NSP 的 CNMT 内部版本从旧版一直为 0 改为 **0x00050200**，并同步 NACP 与界面版本标记。
-- main 之前记录 libnx 服务初始化结果，帮助区分加载器、服务初始化和游戏内错误；这仍是针对闪退的修复尝试，未经用户设备复现，不能保证所有启动问题已解决。
+- main 之前记录 libnx 服务初始化结果，帮助区分加载器、服务初始化和游戏内错误。
 - 新增基于 nx-hbloader 的真正 NRO 转发器，固定目标路径，加入路径长度校验和启动日志。说明与 ISC 许可见 [forwarder/README.md](forwarder/README.md)。
 - 提示时没有任何合法压制牌则直接“不出”；自由领出不会自动跳过。有合法牌、只是策略建议让牌时保留手动选择。
 - 三类音量默认全部 **100%**，旧设置首次迁移一次，后续调整会保存。背景音乐改为 **32 秒原创 Swing 棋牌编曲**，加入手风琴、拨弦、低音与鼓点。
@@ -88,7 +88,7 @@
 
 ![运行诊断与音频自检](preview/diagnostics.png)
 
-如仍发生闪退，请保留错误代码及 `switch/GuandanSwitch/startup-v0.5.2.log`、`switch/GuandanSwitch/boot.log`；转发版另有 `switch/GuandanSwitch/forwarder-v0.5.2.log`；启动日志记录了资源挂载、字体/画面和音频初始化阶段。若文件系统本身不可写，可能无法生成日志，此时请查看模拟器运行日志。未在你的设备上复现前，不能保证所有闪退原因均已排除。
+如仍发生闪退，请保留错误代码及 `switch/GuandanSwitch/startup-v0.5.2.log`、`switch/GuandanSwitch/boot.log`；转发版另有 `switch/GuandanSwitch/forwarder-v0.5.2.log`；启动日志记录了资源挂载、字体/画面和音频初始化阶段。若文件系统本身不可写，可能无法生成日志，此时请查看模拟器运行日志。需要排查时，可结合错误代码和上述日志定位。
 
 ## 牌桌与操作
 
@@ -123,7 +123,7 @@
 
 也可下载本版 `GuandanTime.nsp`，通过兼容的 homebrew 安装器安装。该形态直接包含原生程序与全部资源，无需外置 NRO。标题 ID 为 `010000ABCD000000`，与历史版本一致；更新前建议备份 `switch/GuandanSwitch/` 中的存档。
 
-存档与设置实际保存在 SD 卡 `switch/GuandanSwitch/session.dat`、`profile.txt`。新 GD5 存档可保存出牌记录与复盘数据，兼容读取 GD3/GD4，但旧版程序不能读取 GD5。普通原厂系统无法运行本 homebrew 程序；尚未经过实体 Switch 启动、触屏、音频和休眠恢复验证。
+存档与设置实际保存在 SD 卡 `switch/GuandanSwitch/session.dat`、`profile.txt`。新 GD5 存档可保存出牌记录与复盘数据，兼容读取 GD3/GD4，但旧版程序不能读取 GD5。普通原厂系统无法运行本 homebrew 程序。用户已确认本版本运行正常。
 
 ## 四种模式
 
@@ -159,7 +159,7 @@
 
 ## 功能
 
-- 腾讯《大掼蛋》风格的牌桌界面：翡翠绿、深海蓝、午夜紫三种绒面牌桌主题，圆角牌面、四角点数、逢人配金标、牌背花纹。
+- 腾讯《大掼蛋》风格的牌桌界面：原色夜景、深海蓝、午夜紫三种全屏牌桌主题，圆角牌面、四角点数、逢人配金标、牌背花纹。
 - **四家角色头像**（当前源码使用用户提供的透明肖像图集），出牌方带金色光环，不出/已出完状态清晰；大厅常驻吉祥物同风格。
 - **结算后复盘报告**：牌力曲线（每手牌力归一展示）、四家手牌余量局势图、炸弹次数与最大牌力统计（仅描述牌力与余牌，不提供 AI 评分），每局结束按 ZL 即可回看。
 - 出牌飞行动画、炸弹爆裂特效、不出气泡、快捷表情气泡、结算撒花。
@@ -196,8 +196,8 @@
 - 规则测试覆盖牌型、双副牌、配牌、四王与十张炸弹、非法操作、接风、存档兼容、连续进贡升级；四种模式合计 256 局自动对局。
 - 同源 SDL2 桌面界面完成构建与真实操作处理函数测试，覆盖模式设置、提示轮换、暂停计时、触屏及结算导航；`preview/` 为程序实际渲染的 22 个界面，不是真机截图。
 - Switch 发行文件由固定 devkitPro 工具链从当前源码编译，校验 AArch64、NRO0、内嵌资源边界及新素材内容，附 SHA-256 清单。NSP 只在构建输入齐全时生成并校验；历史 NSP 不冒充本版。
-- 未进行实体 Switch 启动、安装、音频、触屏、休眠恢复和性能验证。本版作为预发布提供。
-- 进阶 AI 是规则启发式策略；复盘展示牌力和余牌统计，不声称竞技 AI 评估。没有联网对战、本地多人、语音播报或残局编辑器。
+- 用户已确认 v0.5.2 运行正常，并将其作为“掼蛋时光语音版”正式发布；这一反馈不代表所有设备和系统组合均已测试。
+- 进阶 AI 是规则启发式策略；复盘展示牌力和余牌统计，不声称竞技 AI 评估。已提供离线语音播报；没有联网对战、本地多人或残局编辑器。
 - 出牌记录与复盘数据随当前牌局保存，下一局开始后重新记录；本地战绩和偏好单独保存。
 
 ## 源码与构建
@@ -221,7 +221,7 @@ Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_
 
 ## 可复现发布
 
-`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.5.2/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建 v0.5.2 预发布，保留历史 Releases。
+`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.5.2/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建发行附件；`.github/workflows/promote-voice-release.yml` 将用户确认的 v0.5.2 晋升为正式版并设为 Latest，保留原有安装包及校验值。
 
 如需自行构建原生 NSP，可在本地将自己的 prod.keys 内容读入 `NSP_KEYS` 环境变量，运行 `node tools/packaging/build_nsp.mjs`。构建器使用标准 AES-CTR 加密 NCA 主体并核对解密后的原生程序、NPDM、图标、版本和全部素材；输入仅在内存中使用。GitHub 发布流程不接收密钥，只还原并核对已打包文件的分片和散列。
 

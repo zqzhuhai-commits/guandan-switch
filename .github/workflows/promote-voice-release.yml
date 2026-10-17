@@ -1,0 +1,48 @@
+name: Publish Guandan Voice Edition stable release
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/promote-voice-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the approved release assets
+        run: |
+          gh api "repos/$GH_REPO/releases/tags/v0.5.2" > /tmp/guandan-release-before.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('/tmp/guandan-release-before.json').read_text())
+          expected=[{"name":"GuandanSwitch-v0.5.2.zip","id":650591277,"size":132963726,"digest":"sha256:ee7cf538f2c19f1f90334415060b4380dc172c610a0bd25a9d6f38ec264ec9f7"},{"name":"GuandanSwitch.nro","id":650591283,"size":44127931,"digest":"sha256:52dddb9f7fa4b8c64c0c50def30c97257098c6566ad9a383997e975315db1851"},{"name":"GuandanTime-Forwarder.nsp","id":650591279,"size":356056,"digest":"sha256:63285e0c5a1db1ae987ac5af4cb3479bcca20338079d4ccd1e397aa60676ba84"},{"name":"GuandanTime.nsp","id":650591280,"size":40761048,"digest":"sha256:80ac79b44f30cefea70e76f698fd244af4688e4a3af9fb20d8d54a7024a1979a"},{"name":"SHA256SUMS.txt","id":650591278,"size":349,"digest":"sha256:4a0b798d1244a3a16dcac04b8cf4ce6d06cb72ccb41c5663782ee82e55f6601d"}]
+          assert d['id']==415828851 and d['tag_name']=='v0.5.2' and not d['draft']
+          fields=('name','id','size','digest')
+          assert sorted([{k:a[k] for k in fields} for a in d['assets']],key=lambda a:a['name'])==sorted(expected,key=lambda a:a['name'])
+          print('PASS: all five approved release assets are unchanged')
+          PY
+      - name: Publish Guandan Voice Edition as stable and latest
+        run: gh release edit v0.5.2 --title '掼蛋时光语音版 v0.5.2' --prerelease=false --latest --notes-file release/notes-v0.5.2.md
+      - name: Verify stable status, latest release and preserved assets
+        run: |
+          gh api "repos/$GH_REPO/releases/tags/v0.5.2" > /tmp/guandan-release-after.json
+          gh api "repos/$GH_REPO/releases/latest" > /tmp/guandan-release-latest.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          before=json.loads(Path('/tmp/guandan-release-before.json').read_text())
+          after=json.loads(Path('/tmp/guandan-release-after.json').read_text())
+          latest=json.loads(Path('/tmp/guandan-release-latest.json').read_text())
+          assert after['name']=='掼蛋时光语音版 v0.5.2' and not after['prerelease'] and not after['draft']
+          assert latest['id']==after['id']==before['id']
+          fields=('name','id','size','digest')
+          assert [{k:a[k] for k in fields} for a in before['assets']]==[{k:a[k] for k in fields} for a in after['assets']]
+          assert before['target_commitish']==after['target_commitish']
+          print('PASS: stable, Latest, title, original assets and build target')
+          PY
