@@ -480,24 +480,25 @@ void click(int x,int y){
 int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
  for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
- {Result r=romfsInit();if(R_FAILED(r)){fprintf(stderr,"romfsInit failed: 0x%x\n",r);}base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";}
+ base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";
 #else
  fontPath="romfs/font.otf";
 #endif
- if(SDL_Init(SDL_INIT_VIDEO)<0){fprintf(stderr,"SDL: %s\n",SDL_GetError());return 1;}
- window=SDL_CreateWindow("掼蛋时光 | Guandan Switch",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE);
- ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
- SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
- // 最早的画面：纯色填充，证明渲染器已启动
- SDL_SetRenderDrawColor(ren,20,40,80,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
- if(TTF_Init()<0){fprintf(stderr,"TTF: %s\n",TTF_GetError());}
- fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20])fprintf(stderr,"Font load failed: %s\n",TTF_GetError());
- // 显示加载中
- if(fonts[20]){SDL_SetRenderDrawColor(ren,8,16,28,255);SDL_RenderClear(ren);text("加载中...",640,340,36,{200,220,255},true);SDL_RenderPresent(ren);}
- // 手柄初始化（放在加载画面之后，便于定位是否卡在这里）
+ if(SDL_Init(SDL_INIT_VIDEO)<0){return 1;}
+ window=SDL_CreateWindow("Guandan",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN);
+ ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){return 1;}
+ SDL_RenderSetLogicalSize(ren,W,H);
+ // 第一步：红色屏幕 - 证明SDL渲染器已启动
+ SDL_SetRenderDrawColor(ren,180,30,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
+ // 第二步：尝试挂载romfs
 #ifdef __SWITCH__
- padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
+ {Result r=romfsInit();if(R_FAILED(r)){fontPath="";}
+ padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);}
 #endif
+ // 第三步：绿色屏幕 - 证明romfs和手柄已初始化
+ SDL_SetRenderDrawColor(ren,30,150,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
+ if(TTF_Init()>=0&&!fontPath.empty())fonts[20]=TTF_OpenFont(fontPath.c_str(),20);
+ if(fonts[20]){SDL_SetRenderDrawColor(ren,8,16,28,255);SDL_RenderClear(ren);text("加载中...",640,340,36,{200,220,255},true);SDL_RenderPresent(ren);}
  loadAvatars();loadBg();
  // 音频：默认跳过避免模拟器挂起，存在 enable_audio 文件时才尝试初始化
  {bool tryAudio=false;std::ifstream af(base+"enable_audio");if(af.good())tryAudio=true;if(tryAudio){SDL_AudioSpec spec{};spec.freq=44100;spec.format=AUDIO_S16LSB;spec.channels=2;spec.samples=2048;SDL_AudioSpec obtained{};audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,&obtained,SDL_AUDIO_ALLOW_ANY_CHANGE);if(audioDevice){fprintf(stderr,"Audio: %dHz %dch\n",obtained.freq,obtained.channels);SDL_PauseAudioDevice(audioDevice,0);}else fprintf(stderr,"Audio unavailable: %s\n",SDL_GetError());}}
