@@ -423,7 +423,7 @@ void overlay(){
   text("B 返回",940,568,17,MUTED);}
 }
 // ---------------- actions ----------------
-void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();cursor=std::min(cursor,int(game.hands[0].size())-1);lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
+void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(m.kind==NONE){message("牌型不合法：当前选了"+std::to_string(cards.size())+"张");return;}if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();if(organized)computeOrganizedGroups();cursor=0;lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
 void doHint(){if(game.turn!=0||game.over||autoplay)return;
  if(hintIndex<0||hintAction!=game.history.size()||hintSeed!=game.seed||hintRound!=game.round){hintOptions=moves(game.hands[0],game.level,game.table);std::stable_sort(hintOptions.begin(),hintOptions.end(),[](const Move&a,const Move&b){if(a.explosive()!=b.explosive())return !a.explosive();if(a.cards.size()!=b.cards.size())return a.cards.size()>b.cards.size();return a.high<b.high;});Move recommended=game.hint(0);if(recommended.kind==NONE&&game.table.kind!=NONE)hintOptions.insert(hintOptions.begin(),recommended);else{auto it=std::find_if(hintOptions.begin(),hintOptions.end(),[&](const Move&m){auto a=m.cards,b=recommended.cards;std::sort(a.begin(),a.end());std::sort(b.begin(),b.end());return a==b;});if(it!=hintOptions.end())std::rotate(hintOptions.begin(),it,it+1);}hintAction=game.history.size();hintSeed=game.seed;hintRound=game.round;hintIndex=-1;}
  clearSelection();if(hintOptions.empty()){message("没有可压过的牌，按 L 不出");return;}hintIndex=(hintIndex+1)%int(hintOptions.size());auto&m=hintOptions[hintIndex];for(int id:m.cards)selected[id]=true;message(std::to_string(hintIndex+1)+" / "+std::to_string(hintOptions.size())+" · "+(m.kind==NONE?std::string("建议不出，按 L 执行"):std::string(kindName(m.kind))+"，按 X 出牌")+" · Y 换一组");}
@@ -450,7 +450,24 @@ void act(Action a){
  if(a==PAUSE){checkpoint();setModal(1);focus=0;sfx(0);return;}if(a==HELP){setModal(3);focus=0;return;}if(a==HISTORY){setModal(game.over?7:5);historyPage=0;focus=0;return;}if(a==EMOTE){if(game.over)return;setModal(6);focus=0;return;}
  if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();statRound=-1;resetHints();lastOver=false;organized=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
  if(a==AUTO){autoplay=!autoplay;clearSelection();message(autoplay?"托管已开启，按 ZR 取消":"已取消托管");sfx(0);lastAI=SDL_GetTicks();return;}
- if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();organized=!organized;if(organized)computeOrganizedGroups();clearSelection();cursor=0;message(organized?"一键理牌：炸弹/同花顺/顺子已分组标注":"已恢复平铺排列");sfx(0);}
+ if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();
+ if(organized&&n>0){
+  // 理牌模式：上下在列内移动，左右切换列
+  int gi=0;for(int g=0;g<(int)orgGroupStart.size()-1;g++){if(cursor>=orgGroupStart[g]&&cursor<orgGroupStart[g+1]){gi=g;break;}}
+  int gst=orgGroupStart[gi],gen=orgGroupStart[gi+1];int layer=cursor-gst;
+  if(a==UP&&n){ // 向上 = 同列上层
+   if(layer<gen-gst-1)cursor++;
+  }else if(a==DOWN&&n){ // 向下 = 同列下层
+   if(layer>0)cursor--;
+  }else if(a==LEFT&&n){ // 左切列
+   if(gi>0){int ng=gi-1;int maxL=orgGroupStart[ng+1]-orgGroupStart[ng]-1;cursor=orgGroupStart[ng]+std::min(layer,maxL);}
+  }else if(a==RIGHT&&n){ // 右切列
+   if(gi<(int)orgGroupStart.size()-2){int ng=gi+1;int maxL=orgGroupStart[ng+1]-orgGroupStart[ng]-1;cursor=orgGroupStart[ng]+std::min(layer,maxL);}
+  }
+ }else{
+  if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;
+ }
+ if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();if(organized)computeOrganizedGroups();cursor=0;lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();organized=!organized;if(organized)computeOrganizedGroups();clearSelection();cursor=0;message(organized?"一键理牌：炸弹/同花顺/顺子已分组标注":"已恢复平铺排列");sfx(0);}
 }
 void click(int x,int y){
  if(modal){
@@ -512,7 +529,20 @@ int main(int argc,char**argv){
  struct Binding{u64 bit;Action a;};Binding bindings[]={{HidNpadButton_Left,LEFT},{HidNpadButton_Right,RIGHT},{HidNpadButton_Up,UP},{HidNpadButton_Down,DOWN},{HidNpadButton_A,CONFIRM},{HidNpadButton_B,BACK},{HidNpadButton_X,PLAY},{HidNpadButton_Y,HINT},{HidNpadButton_L,PASS},{HidNpadButton_R,SORT},{HidNpadButton_ZR,AUTO},{HidNpadButton_ZL,HISTORY},{HidNpadButton_Plus,PAUSE},{HidNpadButton_Minus,HELP}};for(auto b:bindings)if(down&b.bit)act(b.a);
 #endif
  SDL_Event e;while(SDL_PollEvent(&e)){if(e.type==SDL_QUIT)quit=true;if(e.type==SDL_KEYDOWN){switch(e.key.keysym.sym){case SDLK_LEFT:act(LEFT);break;case SDLK_RIGHT:act(RIGHT);break;case SDLK_UP:act(UP);break;case SDLK_DOWN:act(DOWN);break;case SDLK_SPACE:act(CONFIRM);break;case SDLK_RETURN:act(screen&&!modal&&!game.over?PLAY:CONFIRM);break;case SDLK_ESCAPE:act(modal?BACK:PAUSE);break;case SDLK_BACKSPACE:act(BACK);break;case SDLK_h:act(HINT);break;case SDLK_p:act(PASS);break;case SDLK_r:act(SORT);break;case SDLK_t:act(AUTO);break;case SDLK_F1:act(HELP);break;case SDLK_l:act(HISTORY);break;case SDLK_e:act(EMOTE);break;}}
-  if(e.type==SDL_MOUSEBUTTONDOWN&&e.button.which!=SDL_TOUCH_MOUSEID){float mx,my;SDL_RenderWindowToLogical(ren,e.button.x,e.button.y,&mx,&my);click(int(mx),int(my));}if(e.type==SDL_FINGERDOWN)click(int(e.tfinger.x*W),int(e.tfinger.y*H));}
+  if(e.type==SDL_MOUSEBUTTONDOWN&&e.button.which!=SDL_TOUCH_MOUSEID){float mx,my;SDL_RenderWindowToLogical(ren,e.button.x,e.button.y,&mx,&my);click(int(mx),int(my));}if(e.type==SDL_FINGERDOWN)click(int(e.tfinger.x*W),int(e.tfinger.y*H));
+  // 长按滑动多选：手指滑动经过的牌自动选中
+  if(e.type==SDL_FINGERMOTION&&screen&&!modal&&game.turn==0&&!autoplay&&!game.over){
+   int sx=int(e.tfinger.x*W),sy=int(e.tfinger.y*H);int n=game.hands[0].size();
+   if(organized){auto pos=organizedPositions();
+    for(int gi=(int)orgGroupStart.size()-2;gi>=0;gi--){
+     for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1];ci++){
+      int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
+      if(sx>=pos[ci].x&&sx<pos[ci].x+pos[ci].w&&sy>=yy&&sy<yy+pos[ci].h){
+       if(!selected[id]){selected[id]=true;sfx(0);}cursor=ci;return;}}}}
+   else{int step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
+    for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
+     if(sx>=xx+i*step&&sx<xx+i*step+66&&sy>=yy&&sy<yy+104){
+      int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;return;}}}}}
  Uint32 now=SDL_GetTicks();
  if(screen&&!modal){
   for(int p=0;p<4;p++){Move cur=game.shown[p];Move old=lastShown[p];
