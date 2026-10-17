@@ -1,0 +1,71 @@
+{
+  "version": "0.5.2",
+  "build_commit": "766037661d915b772490c42a16f6452a72c6832d",
+  "build_run": 39037666228,
+  "nro_sha256": "52dddb9f7fa4b8c64c0c50def30c97257098c6566ad9a383997e975315db1851",
+  "nro_path": "sdmc:/switch/GuandanSwitch/GuandanSwitch.nro",
+  "cnmt_version": 328192,
+  "nsp_size": 40761048,
+  "nsp_sha256": "80ac79b44f30cefea70e76f698fd244af4688e4a3af9fb20d8d54a7024a1979a",
+  "parts": [
+    {
+      "name": "GuandanTime.nsp.part00",
+      "size": 4194304,
+      "sha256": "2db2b33e5c563ad2c2c90b7cb94ace1ba3cfc5edb41941e106d14a1b4ceab6bf"
+    },
+    {
+      "name": "GuandanTime.nsp.part01",
+      "size": 4194304,
+      "sha256": "cebbbd9983ebf9a36244ab0de941ab349708cbfa2a3ae5a3dae9c79d3d2e1377"
+    },
+    {
+      "name": "GuandanTime.nsp.part02",
+      "size": 4194304,
+      "sha256": "b9a08a96da0bc0528347c361b6fef250b693b9830601f873383cc705d1b51686"
+    },
+    {
+      "name": "GuandanTime.nsp.part03",
+      "size": 4194304,
+      "sha256": "84fd8a995b6a0b5166401bfb60743e362cec044a14bf99378839925cad4df5a7"
+    },
+    {
+      "name": "GuandanTime.nsp.part04",
+      "size": 4194304,
+      "sha256": "0e380e5f43f727a0510d3d05e0931a6e11cb1a635a5ca5511a0f4abcbd55404f"
+    },
+    {
+      "name": "GuandanTime.nsp.part05",
+      "size": 4194304,
+      "sha256": "e38d92a96b8a2039ebdf3d02ff9d272f1c5a5b6997a6899548a9f5957bcc8fba"
+    },
+    {
+      "name": "GuandanTime.nsp.part06",
+      "size": 4194304,
+      "sha256": "c5742536bd48b73e6bab55266479324fda01d03f3bdbe76911cbb57bfd1d920f"
+    },
+    {
+      "name": "GuandanTime.nsp.part07",
+      "size": 4194304,
+      "sha256": "41b99e551528baf348200a8c56f995e78b91f0b5b281eb05accf6a86a72b7e61"
+    },
+    {
+      "name": "GuandanTime.nsp.part08",
+      "size": 4194304,
+      "sha256": "f71cd30a3b79b5b0be219bdbf07fa69a8627dc6af2ee4c06c1aedcbfd3243db5"
+    },
+    {
+      "name": "GuandanTime.nsp.part09",
+      "size": 3012312,
+      "sha256": "b100ad3e1210c18df2ff8917e8d732f9b6c43d20500a2c76f5e326a1f262e1ee"
+    }
+  ],
+  "forwarder_nsp_size": 356056,
+  "forwarder_nsp_sha256": "63285e0c5a1db1ae987ac5af4cb3479bcca20338079d4ccd1e397aa60676ba84",
+  "forwarder_parts": [
+    {
+      "name": "GuandanTime-Forwarder.nsp.part00",
+      "size": 356056,
+      "sha256": "63285e0c5a1db1ae987ac5af4cb3479bcca20338079d4ccd1e397aa60676ba84"
+    }
+  ]
+}

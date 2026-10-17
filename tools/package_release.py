@@ -7,10 +7,12 @@ import subprocess
 import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT/'dist'
-PACKAGE = DIST/'GuandanSwitch-v0.5.1'
+PACKAGE = DIST/'GuandanSwitch-v0.5.2'
 PACKAGE.mkdir(exist_ok=True)
 shutil.copy2(DIST/'GuandanSwitch.nro', PACKAGE/'GuandanSwitch.nro')
-notes = (ROOT/'release/notes-v0.5.1.md').read_text()
+notes = (ROOT/'release/notes-v0.5.2.md').read_text()
+shutil.copy2(DIST/'GuandanTime-Forwarder.nsp', PACKAGE/'GuandanTime-Forwarder.nsp')
+(PACKAGE/'安装说明.txt').write_text('转发版：先将 GuandanSwitch.nro 复制到 SD 卡 switch/GuandanSwitch/GuandanSwitch.nro，再安装 GuandanTime-Forwarder.nsp。独立版 GuandanTime.nsp 无需外置 NRO。两个版本可以同时安装。\n')
 if (DIST/'GuandanTime.nsp').exists():
     shutil.copy2(DIST/'GuandanTime.nsp', PACKAGE/'GuandanTime.nsp')
     notes += '\n本次已生成原生单文件 NSP，游戏和资源全部内嵌。\n'
@@ -33,12 +35,12 @@ shutil.copy2(ROOT/'romfs/font.otf', font)
 if (DIST/'BUILD-SOURCE-COMMIT.txt').exists():
     shutil.copy2(DIST/'BUILD-SOURCE-COMMIT.txt', PACKAGE/'BUILD-SOURCE-COMMIT.txt')
 subprocess.run(['git','rev-parse','HEAD'], cwd=ROOT, check=True, stdout=(PACKAGE/'SOURCE-COMMIT.txt').open('w'))
-archive = DIST/'GuandanSwitch-v0.5.1.zip'
+archive = DIST/'GuandanSwitch-v0.5.2.zip'
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
     for p in sorted(PACKAGE.rglob('*')):
         if p.is_file(): z.write(p, p.relative_to(DIST))
 with zipfile.ZipFile(archive) as z: assert z.testzip() is None
-assets = [archive, DIST/'GuandanSwitch.nro']
+assets = [archive, DIST/'GuandanSwitch.nro', DIST/'GuandanTime-Forwarder.nsp']
 if (DIST/'GuandanTime.nsp').exists(): assets.append(DIST/'GuandanTime.nsp')
 (DIST/'SHA256SUMS.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in assets))
 print((DIST/'SHA256SUMS.txt').read_text())

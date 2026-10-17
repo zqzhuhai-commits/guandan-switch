@@ -1,17 +1,33 @@
 # 掼蛋时光 · Switch 原生单机版
 
-当前版本：**v0.5.1 测试版**。基于 v0.4.1 重新制作参考图中的牌桌与操作布局，发牌后默认按点数排序、横排展示；不使用后续试验版作为实现基础。尚未进行实体 Switch 验证。
+当前版本：**v0.5.2 测试版**。本版继续排查独立 NSP 闪退，增加真正的 NRO 转发 NSP，并替换三套完整主题背景。尚未进行实体设备启动验证。
 
-[下载 v0.5.1 完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.1/GuandanSwitch-v0.5.1.zip) · [下载新版 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.1/GuandanTime.nsp) · [下载独立 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.1/GuandanSwitch.nro) · [SHA-256 校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.1/SHA256SUMS.txt)
+[下载独立 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanTime.nsp) · [下载 NRO 转发 NSP](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanTime-Forwarder.nsp) · [下载配套 NRO](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanSwitch.nro) · [完整发行包](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/GuandanSwitch-v0.5.2.zip) · [校验值](https://github.com/zqzhuhai-commits/guandan-switch/releases/download/v0.5.2/SHA256SUMS.txt)
 
-本版同时提供原生单文件 NSP 和独立 NRO，字体、背景、角色、音乐和人声全部内嵌，无需另拷资源或 NRO 转发文件。NSP 使用本版源码的原生 NSO 打包，密钥仅在本地构建时使用，不包含在仓库和发行包中。仓库根目录 `GuandanTime.nsp` 是历史文件，请下载上方 v0.5.1 Release 附件。
+| 安装包 | 运行方式 | 标题 ID |
+| --- | --- | --- |
+| GuandanTime.nsp | 独立运行，游戏与全部资源内嵌 | 010000ABCD000000 |
+| GuandanTime-Forwarder.nsp | 先放置外置 NRO，再启动“掼蛋时光 NRO”图标 | 010000ABCD001000 |
 
-参考腾讯《大掼蛋》的休闲棋牌氛围，独立编写规则、AI 和界面；不含腾讯的程序、美术、角色、音频或账号服务。游戏完全离线，无内购、无联网、无真钱交易。
+**转发版必读：将本版 `GuandanSwitch.nro` 拷到 SD 卡 `switch/GuandanSwitch/GuandanSwitch.nro`。路径和文件名须一致。**两个 NSP 使用不同标题 ID，可以同时安装；不要拿转发版替代独立版文件。NRO 也可在 hbmenu 应用模式直接运行。
 
+本版所有形态的音乐、音效和 37 条人声都包含在游戏资源中。密钥仅在本地打包时使用，不包含在仓库或发行包中。仓库根目录历史 `GuandanTime.nsp` 不属于本版，请使用上方 Releases 附件。界面应显示 **v0.5.2**；若没有显示，当前运行的仍是旧程序。
+
+本项目独立编写规则、AI 和界面，不含腾讯程序、美术或音频。背景音乐为类似轻快棋牌氛围的原创编曲，游戏完全离线。
+
+## v0.5.2 更新
+
+- 独立 NSP 补齐 `application_type=1` 能力描述，采用应用 CPU、服务权限及 8 MiB 主线程栈；构建后检查实际 NPDM，另外检查转发器 NPDM。
+- NSP 的 CNMT 内部版本从旧版一直为 0 改为 **0x00050200**，并同步 NACP 与界面版本标记。
+- main 之前记录 libnx 服务初始化结果，帮助区分加载器、服务初始化和游戏内错误；这仍是针对闪退的修复尝试，未经用户设备复现，不能保证所有启动问题已解决。
+- 新增基于 nx-hbloader 的真正 NRO 转发器，固定目标路径，加入路径长度校验和启动日志。说明与 ISC 许可见 [forwarder/README.md](forwarder/README.md)。
+- 提示时没有任何合法压制牌则直接“不出”；自由领出不会自动跳过。有合法牌、只是策略建议让牌时保留手动选择。
+- 三类音量默认全部 **100%**，旧设置首次迁移一次，后续调整会保存。背景音乐改为 **32 秒原创 Swing 棋牌编曲**，加入手风琴、拨弦、低音与鼓点。
+- 三套主题改用独立全屏新背景图，完整替换旧版程序绘制的简易场景。图源与生成说明见 [主题资源说明](docs/theme-assets.md)。
 
 ## 界面截图
 
-以下为 v0.5.1 同源 SDL2 桌面程序实际渲染的 1280×720 截图，展示默认横排手牌、参考牌桌、菜单弹窗和细黑边扑克牌；不是实体 Switch 截图。点击图片可查看原图。
+以下为 v0.5.2 同源 SDL2 桌面程序实际渲染的 1280×720 截图，展示默认横排手牌、参考牌桌、菜单弹窗和细黑边扑克牌；不是实体 Switch 截图。点击图片可查看原图。
 
 | 默认横排手牌 | 选牌与出牌按钮 |
 |---|---|
@@ -49,9 +65,9 @@
 
 ![实际发牌与出牌动效](preview/motion.gif)
 
-## v0.5.1 修复与界面调整
+## 保留的界面与功能
 
-- 三套牌桌保留原名并重绘完整场景：原色夜景为暖灯城市与墨绿桌面，深海蓝为水下光束与气泡，午夜紫为月夜星空与紫色远山。
+- 三套牌桌保留原名并重绘完整场景：原色夜景为灯笼城市露台，深海蓝为海底玻璃穹顶，午夜紫为紫藤月夜露台。
 - 默认横排手牌，手动理牌时散牌也各自横向排列；主界面底部四个按钮取消背景和边框。
 - 加入离线中文合成人声：牌型、点数、炸弹、表情及等待台词；等待超过 11 秒每回合最多提醒一次，支持独立人声音量，播报时自动压低音乐。
 - 修复动效未绘制的问题，加入发牌入场、出牌飞行、炸弹冲击、回合呼吸光圈和结算彩纸。
@@ -65,14 +81,14 @@
 
 - 补齐父目录创建；数据目录为 SD 根目录下 `switch/GuandanSwitch/`，与 NSP 放置位置无关。
 - 修复 Switch 不能直接覆盖重命名导致的重复保存失败。牌局和设置均写入 `.tmp` 后轮换 `.bak`，失败时保留可恢复数据；旧 GD5 存档可继续读取，无需删除。
-- 新增内嵌的 24 秒原创循环背景音乐，并与操作音效实时混音。在“声音与游戏设置”中分别调整背景音乐、操作音效、对局人声音量和总声音开关；保留已有静音偏好。
+- 内嵌 32 秒原创轻快棋牌循环背景音乐，并与操作音效实时混音。在“声音与游戏设置”中分别调整背景音乐、操作音效、对局人声音量和总声音开关；v0.5.2 首次迁移开启总声音并将三类音量设为 100%，之后保留玩家偏好。
 - 将音频初始化与画面启动分开，音频设备失败不再直接退出游戏。
-- 将 NSP 进程描述符调整为应用内存池、CPU 0–2 与应用优先级，并在打包后校验二进制 NPDM 字段。
+- 将 NSP 进程描述符调整为应用类型、应用内存池、CPU 0–2 与应用优先级，并在打包后校验二进制 NPDM 字段。
 - “更多 → 运行诊断 / 音频自检”可查看数据路径、最近写入错误、音频驱动、音乐载入和静音状态；支持重试。
 
 ![运行诊断与音频自检](preview/diagnostics.png)
 
-如仍发生闪退，请保留 `switch/GuandanSwitch/boot.log`；启动日志记录了资源挂载、字体/画面和音频初始化阶段。若文件系统本身不可写，可能无法生成日志，此时请查看模拟器运行日志。未在你的设备上复现前，不能保证所有闪退原因均已排除。
+如仍发生闪退，请保留错误代码及 `switch/GuandanSwitch/startup-v0.5.2.log`、`switch/GuandanSwitch/boot.log`；转发版另有 `switch/GuandanSwitch/forwarder-v0.5.2.log`；启动日志记录了资源挂载、字体/画面和音频初始化阶段。若文件系统本身不可写，可能无法生成日志，此时请查看模拟器运行日志。未在你的设备上复现前，不能保证所有闪退原因均已排除。
 
 ## 牌桌与操作
 
@@ -99,7 +115,7 @@
 - 调整明牌模式布局，避免记牌器遮住对手手牌；修复头像透明与颜色通道、主题切换和记牌器大小王数量。
 - 复盘标记为牌力统计（非 AI 评估），修复坐标网格和玩家图例。
 
-## 安装 v0.5.1
+## 安装 v0.5.2
 
 1. 下载 Release 中的 `GuandanSwitch.nro`，或解压完整发行包。
 2. 将 NRO 放到 SD 卡 `switch/GuandanSwitch/GuandanSwitch.nro`。
@@ -190,7 +206,7 @@
 
 为兼容上传接口，完整发行包保存在 `release/*.partNN`，各片的校验值在 `release/manifest.json`。克隆后先执行 `python3 tools/restore_assets.py`，自动校验并还原完整 ZIP、内置字体和单文件 NSP；不需要联网下载字体。
 
-Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make APP_JSON= APP_VERSION=0.5.1 -j2` 生成独立 NRO。
+Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_ttf、FreeType、HarfBuzz、zlib、libpng、bzip2。设置 `DEVKITPRO`、`DEVKITA64`，把 `portlibs/switch/bin` 和 `tools/bin` 加入 PATH 后，在工程目录执行 `make APP_JSON= APP_VERSION=0.5.2 -j2` 生成独立 NRO。
 
 本次使用的开发环境镜像为：
 `devkitpro/devkita64@sha256:82575ea78651b530b2e232bb3799cfd1fe331514e053d5f724bb4b28191fb79d`
@@ -205,11 +221,11 @@ Switch 构建依赖 devkitPro 的 devkitA64、libnx、switch-sdl2、switch-sdl2_
 
 ## 可复现发布
 
-`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.5.1/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建 v0.5.1 预发布，保留历史 Releases。
+`.github/workflows/publish.yml` 先运行规则及桌面交互检查，再使用固定摘要的 devkitPro 镜像交叉编译当前源码；校验 NRO0、内嵌资源和文件边界，生成完整 ZIP 与 SHA-256 校验清单。主分支检查成功后保留原生构建产物；`.github/workflows/publish-nsp.yml` 使用 `release/v0.5.2/native-nsp.json` 固定的构建记录、NSP 分片及 SHA-256 创建 v0.5.2 预发布，保留历史 Releases。
 
 如需自行构建原生 NSP，可在本地将自己的 prod.keys 内容读入 `NSP_KEYS` 环境变量，运行 `node tools/packaging/build_nsp.mjs`。构建器使用标准 AES-CTR 加密 NCA 主体并核对解密后的原生程序、NPDM、图标、版本和全部素材；输入仅在内存中使用。GitHub 发布流程不接收密钥，只还原并核对已打包文件的分片和散列。
 
-本版 NSP 的本地打包使用调用者提供的 `prod.keys`。这是独立 homebrew，不使用商业游戏的 title keys。`release/v0.5.1/` 仅保存已打包的 NSP 分片和校验信息，不含密钥；可运行 `python3 tools/restore_native_nsp.py` 还原到 `dist/GuandanTime.nsp`。发行包中的 `BUILD-SOURCE-COMMIT.txt` 标识原生编译的源码提交，`SOURCE-COMMIT.txt` 标识包含文档和截图的打包提交。
+本版 NSP 的本地打包使用调用者提供的 `prod.keys`。这是独立 homebrew，不使用商业游戏的 title keys。`release/v0.5.2/` 仅保存已打包的 NSP 分片和校验信息，不含密钥；可运行 `python3 tools/restore_native_nsp.py` 还原到 `dist/GuandanTime.nsp`。发行包中的 `BUILD-SOURCE-COMMIT.txt` 标识原生编译的源码提交，`SOURCE-COMMIT.txt` 标识包含文档和截图的打包提交。
 
 默认发牌按点数排序横排。点击“恢复”回到横排，按 R 可手动智能理牌，散牌不会叠成竖列；桌面可用 C 恢复、F 切换花色、G 查找同花顺、K 展开记牌器。
 

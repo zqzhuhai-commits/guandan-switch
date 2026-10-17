@@ -23,6 +23,7 @@ if (forwarder) {
   const path = 'sdmc:/switch/GuandanSwitch/GuandanSwitch.nro';
   romfs.nextNroPath = new Blob([path]); romfs.nextArgv = new Blob([path]);
   romfs['target-version.txt'] = new Blob(['GuandanSwitch v0.5.2 external NRO\n']);
+  romfs['LICENSE-forwarder.txt'] = new Blob([await bin('forwarder/LICENSE.md')]);
 } else for (const f of await readdir(resolve(root, 'romfs'))) {
   if (!f.endsWith('.gz') && !f.startsWith('.')) romfs[f] = new Blob([await bin('romfs/' + f)]);
 }

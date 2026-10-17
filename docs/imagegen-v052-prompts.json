@@ -1,0 +1,17 @@
+{
+  "mode": "built-in imagegen",
+  "assets": [
+    {
+      "path": "romfs/theme-night-v052.png",
+      "prompt": "Use case: stylized-concept. Asset type: production background for a Chinese casual card game on Nintendo Switch, wide 16:9 landscape. Create a polished premium 3D illustrated game environment, high quality rendered materials and cinematic lighting. Warm lantern-lit Chinese urban rooftop card club at night, emerald green velvet tabletop and polished dark wood with fine gold inlay, distant modern city windows and terrace foliage, amber paper lanterns and calm night sky. Rich warm gold versus emerald, sophisticated inviting night atmosphere. Composition: fixed seated player camera, a very broad empty poker table fills the entire lower 72 percent of frame, table edge begins near upper 28 percent, environment visible across the top and far left/right. The table playing surface must remain smooth, unobstructed, low contrast and empty for cards and UI overlay. Extend artwork to all four image edges. No UI, no frames around the image, no text, no logos, no cards, no characters, no chips, no watermark. Unique standalone complete scene, not an atlas."
+    },
+    {
+      "path": "romfs/theme-ocean-v052.png",
+      "prompt": "Use case: stylized-concept. Asset type: production background for a Chinese casual card game on Nintendo Switch, wide 16:9 landscape. Create a polished premium 3D illustrated game environment, high quality rendered materials and cinematic lighting. An underwater fantasy lounge inside a panoramic glass dome in the deep ocean, cool cobalt blue velvet tabletop with brushed silver edges, distant blue coral reefs and small silhouettes of fish, tall aquatic plants on outer edges, teal volumetric light rays and delicate bubbles. Clearly underwater, deep blue and cyan. Composition: fixed seated player camera, a very broad empty poker table fills the entire lower 72 percent of frame, table edge begins near upper 28 percent, environment visible across the top and far left/right. The table playing surface must remain smooth, unobstructed, low contrast and empty for cards and UI overlay. Extend artwork to all four image edges. No UI, no frames around the image, no text, no logos, no cards, no characters, no chips, no watermark. Unique standalone complete scene, not an atlas."
+    },
+    {
+      "path": "romfs/theme-purple-v052.png",
+      "prompt": "Use case: stylized-concept. Asset type: production background for a Chinese casual card game on Nintendo Switch, wide 16:9 landscape. Create a polished premium 3D illustrated game environment, high quality rendered materials and cinematic lighting. A magical quiet moonlit terrace above violet mountain clouds, plum purple velvet tabletop with elegant champagne silver edges, a large crescent moon and scattered stars in indigo sky, pale purple wisteria and stone balustrades at outer edges. Dreamy midnight lavender and violet atmosphere. Composition: fixed seated player camera, a very broad empty poker table fills the entire lower 72 percent of frame, table edge begins near upper 28 percent, environment visible across the top and far left/right. The table playing surface must remain smooth, unobstructed, low contrast and empty for cards and UI overlay. Extend artwork to all four image edges. No UI, no frames around the image, no text, no logos, no cards, no characters, no chips, no watermark. Unique standalone complete scene, not an atlas."
+    }
+  ]
+}
