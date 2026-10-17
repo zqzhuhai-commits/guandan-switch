@@ -490,10 +490,14 @@ int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=f
  SDL_RenderSetLogicalSize(ren,W,H);
  // 第一步：红色屏幕 - 证明SDL渲染器已启动
  SDL_SetRenderDrawColor(ren,180,30,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
- // 第二步：尝试挂载romfs
+ // 第二步：尝试挂载romfs和手柄
 #ifdef __SWITCH__
- {Result r=romfsInit();if(R_FAILED(r)){fontPath="";}
- padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);}
+ {Result r=romfsInit();if(R_FAILED(r))fontPath="";}
+ padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+#endif
+ static PadState pad;
+#ifdef __SWITCH__
+ padInitializeDefault(&pad);
 #endif
  // 第三步：绿色屏幕 - 证明romfs和手柄已初始化
  SDL_SetRenderDrawColor(ren,30,150,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
