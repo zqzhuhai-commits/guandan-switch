@@ -260,15 +260,59 @@ void counterPanel(){
  for(int i=0;i<15;i++){int col=i%8,row=i/8;int x=26+col*37,y=102+row*37;box(x,y,34,32,6,{255,255,255,10});text(lab[i],x+4,y+1,14,CREAM);int n=game.remaining(rr[i]);text(std::to_string(n),x+22,y+12,17,n==0?RED:GOLD);}
 }
 struct HandPos{int x,y,w,h;};
+struct OrganizedGroup{std::vector<int>cards;std::string label;};
+static std::vector<OrganizedGroup> orgGroups;
+static std::vector<int> orgGroupStart;
+void computeOrganizedGroups(){
+ auto&hand=game.hands[0];int level=game.level;
+ std::array<std::vector<int>,18>rk;std::vector<int>jokers;
+ for(int id:hand){int r=Card{id}.rank();if(r>=16)jokers.push_back(id);else rk[r].push_back(id);}
+ for(int r=2;r<=14;r++)std::sort(rk[r].begin(),rk[r].end(),[](int a,int b){return Card{a}.suit()<Card{b}.suit();});
+ orgGroups.clear();orgGroupStart.clear();
+ // 1. Bombs (4+ same rank)
+ for(int r=2;r<=14;r++)if(rk[r].size()>=4){orgGroups.push_back({rk[r],std::to_string(rk[r].size())+"炸"});rk[r].clear();}
+ // 2. Straight flushes (greedy per suit)
+ for(int s=0;s<4;s++)for(int st=1;st<=10;st++){
+  std::vector<int>gc;bool ok=true;
+  for(int i=0;i<5;i++){int r=st+i==1?14:st+i;
+   auto it=std::find_if(rk[r].begin(),rk[r].end(),[&](int id){return Card{id}.suit()==s;});
+   if(it==rk[r].end()){ok=false;break;}gc.push_back(*it);rk[r].erase(it);}
+  if(!ok)for(int id:gc){for(int r=2;r<=14;r++){auto it=std::find(rk[r].begin(),rk[r].end(),id);if(it!=rk[r].end()){rk[r].insert(it,id);break;}}}}
+ // 3. Straights (5 consecutive)
+ for(int st=1;st<=10;st++){
+  std::vector<int>gc;bool ok=true;
+  for(int i=0;i<5;i++){int r=st+i==1?14:st+i;
+   if(rk[r].empty()){ok=false;break;}gc.push_back(rk[r][0]);rk[r].erase(rk[r].begin());}
+  if(ok)orgGroups.push_back({gc,"顺子"});
+  else for(int id:gc)for(int r=2;r<=14;r++){if(!std::count(rk[r].begin(),rk[r].end(),id)){auto it=std::find_if(rk[r].begin(),rk[r].end(),[&](int x){return power(Card{x}.rank(),level)>=power(Card{id}.rank(),level);});rk[r].insert(it,id);break;}}
+ }
+ // 4. Consecutive pairs (三连对)
+ for(int st=1;st<=12;st++){
+  bool ok=true;std::vector<int>gc;
+  for(int i=0;i<3;i++){int r=st+i==1?14:st+i;
+   if(rk[r].size()<2){ok=false;break;}
+   gc.push_back(rk[r][0]);gc.push_back(rk[r][1]);rk[r].erase(rk[r].begin(),rk[r].begin()+2);}
+  if(ok)orgGroups.push_back({gc,"三连对"});
+  else for(int id:gc)for(int r=2;r<=14;r++){if(!std::count(rk[r].begin(),rk[r].end(),id))rk[r].push_back(id);}
+ }
+ // 5. Remaining by rank
+ for(int r=2;r<=14;r++)if(!rk[r].empty()){std::string lbl=rk[r].size()==3?"三带":"";orgGroups.push_back({rk[r],lbl});}
+ if(!jokers.empty())orgGroups.push_back({jokers,""});
+ // Rebuild hand in group order
+ hand.clear();
+ for(auto&g:orgGroups)for(int id:g.cards)hand.push_back(id);
+ // Compute group start indices
+ orgGroupStart.clear();int idx=0;
+ for(auto&g:orgGroups){orgGroupStart.push_back(idx);idx+=g.cards.size();}
+ orgGroupStart.push_back(idx);
+}
 std::vector<HandPos> organizedPositions(){
- auto&hand=game.hands[0];int n=hand.size();std::vector<HandPos>pos(n);
- std::vector<int>groupStart;int curRank=-1;
- for(int i=0;i<n;i++){int r=Card{hand[i]}.rank();if(r!=curRank){groupStart.push_back(i);curRank=r;}}
- int ng=groupStart.size();groupStart.push_back(n);
+ int n=game.hands[0].size();std::vector<HandPos>pos(n);
+ int ng=orgGroupStart.size()-1;
  int cw=80,ch=118;
- int colStep=std::max(56,std::min(75,1120/std::max(1,ng)));
+ int colStep=std::max(56,std::min(78,1120/std::max(1,ng)));
  int vStep=42;int totalW=(ng-1)*colStep+cw;int sx=(W-totalW)/2;int baseBottom=598;
- for(int gi=0;gi<ng;gi++){int st=groupStart[gi],en=groupStart[gi+1];
+ for(int gi=0;gi<ng;gi++){int st=orgGroupStart[gi],en=orgGroupStart[gi+1];
   for(int ci=st;ci<en;ci++){int layer=ci-st;pos[ci]={sx+gi*colStep,baseBottom-layer*vStep-ch,cw,ch};}}
  return pos;
 }
@@ -301,14 +345,16 @@ void table(){
  for(int p=1;p<4;p++)if(!fin(p)&&game.hands[p].size()<=5)text("余 "+std::to_string(game.hands[p].size())+" 张！",p==1?96:p==2?790:1184,p==2?166:(game.mode==2?458:374),18,{255,180,106},true);
  int n=game.hands[0].size();
  if(organized&&n>0){auto pos=organizedPositions();
-  std::vector<int>gs;int cr=-1;
-  for(int i=0;i<n;i++){int r=Card{game.hands[0][i]}.rank();if(r!=cr){gs.push_back(i);cr=r;}}
-  gs.push_back(n);
-  for(int gi=0;gi<(int)gs.size()-1;gi++){
-   for(int ci=gs[gi+1]-1;ci>=gs[gi];ci--){
+  for(int gi=0;gi<(int)orgGroupStart.size()-1;gi++){
+   for(int ci=orgGroupStart[gi+1]-1;ci>=orgGroupStart[gi];ci--){
     int id=game.hands[0][ci];int x=pos[ci].x,y=pos[ci].y;
     if(selected[id])y-=18;bool focused=ci==cursor&&game.turn==0&&!autoplay&&!game.over;
-    cardFace(id,x,y,pos[ci].w,pos[ci].h,selected[id],focused);}}
+    cardFace(id,x,y,pos[ci].w,pos[ci].h,selected[id],focused);}
+   // Draw group label below column
+   if(!orgGroups[gi].label.empty()){
+    int lx=pos[orgGroupStart[gi]].x+pos[orgGroupStart[gi]].w/2;
+    text(orgGroups[gi].label,lx,606,13,{180,220,255},true);}
+  }
  }else{int step=std::min(58,1138/std::max(1,n-1)),x=(W-(step*std::max(0,n-1)+66))/2;
   for(int i=0;i<n;i++)cardFace(game.hands[0][i],x+i*step,513,66,104,selected[game.hands[0][i]],i==cursor&&game.turn==0&&!autoplay&&!game.over);}
  if(game.mode==2)text("明牌练习 · 其余三家手牌可见",640,502,15,{207,221,204,130},true);
@@ -375,7 +421,7 @@ void act(Action a){
  if(a==PAUSE){checkpoint();setModal(1);focus=0;sfx(0);return;}if(a==HELP){setModal(3);focus=0;return;}if(a==HISTORY){setModal(game.over?7:5);historyPage=0;focus=0;return;}if(a==EMOTE){if(game.over)return;setModal(6);focus=0;return;}
  if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();statRound=-1;resetHints();lastOver=false;organized=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
  if(a==AUTO){autoplay=!autoplay;clearSelection();message(autoplay?"托管已开启，按 ZR 取消":"已取消托管");sfx(0);lastAI=SDL_GetTicks();return;}
- if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();organized=!organized;clearSelection();cursor=0;message(organized?"一键理牌：同点牌叠列放大显示":"已恢复平铺排列");sfx(0);}
+ if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();organized=!organized;if(organized)computeOrganizedGroups();clearSelection();cursor=0;message(organized?"一键理牌：炸弹/同花顺/顺子已分组标注":"已恢复平铺排列");sfx(0);}
 }
 void click(int x,int y){
  if(modal){
@@ -394,11 +440,8 @@ void click(int x,int y){
  for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){act(acts[i]);return;}
  if(game.turn==0&&!autoplay){
   if(organized){auto pos=organizedPositions();int n=game.hands[0].size();
-   std::vector<int>gs;int cr=-1;
-   for(int i=0;i<n;i++){int r=Card{game.hands[0][i]}.rank();if(r!=cr){gs.push_back(i);cr=r;}}
-   gs.push_back(n);
-   for(int gi=(int)gs.size()-2;gi>=0;gi--){
-    for(int ci=gs[gi];ci<gs[gi+1];ci++){
+   for(int gi=(int)orgGroupStart.size()-2;gi>=0;gi--){
+    for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1];ci++){
      int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
      if(x>=pos[ci].x&&x<pos[ci].x+pos[ci].w&&y>=yy&&y<yy+pos[ci].h){cursor=ci;act(CONFIRM);return;}}}}
   else{int n=game.hands[0].size(),step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
