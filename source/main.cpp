@@ -267,7 +267,7 @@ std::vector<HandPos> organizedPositions(){
  int ng=groupStart.size();groupStart.push_back(n);
  int cw=80,ch=118;
  int colStep=std::max(56,std::min(75,1120/std::max(1,ng)));
- int vStep=34;int totalW=(ng-1)*colStep+cw;int sx=(W-totalW)/2;int baseBottom=598;
+ int vStep=42;int totalW=(ng-1)*colStep+cw;int sx=(W-totalW)/2;int baseBottom=598;
  for(int gi=0;gi<ng;gi++){int st=groupStart[gi],en=groupStart[gi+1];
   for(int ci=st;ci<en;ci++){int layer=ci-st;pos[ci]={sx+gi*colStep,baseBottom-layer*vStep-ch,cw,ch};}}
  return pos;
