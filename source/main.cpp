@@ -369,7 +369,7 @@ void table(){
  drawAvatar(0,260,452,30,game.turn==0&&!game.over&&!autoplay,game.passed[0],fin(0));
  text("你 · "+std::to_string(game.hands[0].size())+" 张",296,442,17,CREAM);
  if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0){float el=float(now-lastAI)/float(TURN_MS);if(el<1){arc(197,452,23,4,-1.57f,-1.57f+6.2832f*el,GOLD);text(std::to_string(std::max(0,int((TURN_MS-(now-lastAI))/1000))),197,443,17,GOLD,true);}}
- auto chosen=selection();Move preview=identify(chosen,game.level,game.table);if(!chosen.empty()){std::string label="已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"无法出牌":std::string(kindName(preview.kind)));text(label,540,478,17,preview.kind==NONE?Col{255,151,151}:GOLD,true);btn(730,466,100,"✕ 清空",my,false);}
+ auto chosen=selection();Move preview=identify(chosen,game.level,game.table);if(!chosen.empty()){std::string label="已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"无法出牌":std::string(kindName(preview.kind)));text(label,640,478,17,preview.kind==NONE?Col{255,151,151}:GOLD,true);}
  for(int p=1;p<4;p++)if(!fin(p)&&game.hands[p].size()<=5)text("余 "+std::to_string(game.hands[p].size())+" 张！",p==1?96:p==2?790:1184,p==2?166:(game.mode==2?458:374),18,{255,180,106},true);
  int n=game.hands[0].size();
  if(organized&&n>0){auto pos=organizedPositions();
@@ -389,7 +389,7 @@ void table(){
  drawFx(now);
  auto btn=[&](int bx,int by,int bw,const std::string&l,bool en,bool act){box(bx,by,bw,48,14,act?GOLD:en?Col{255,255,255,20}:Col{255,255,255,7});text(l,bx+bw/2,by+9,20,act?INK:en?CREAM:MUTED,true);};
  bool my=game.turn==0&&!game.over&&!autoplay;
- btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my&&preview.kind!=NONE,my&&preview.kind!=NONE);btn(700,630,120,organized?"恢复平铺":"一键理牌",true,false);btn(830,630,150,autoplay?"ZR 接管":"ZR 托管",!game.over,!game.over&&autoplay);btn(990,630,120,"表情",true,false);
+ btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my&&preview.kind!=NONE,my&&preview.kind!=NONE);if(!chosen.empty())btn(700,630,120,"✕ 清空",my,false);else btn(700,630,120,organized?"恢复平铺":"一键理牌",true,false);btn(830,630,150,autoplay?"ZR 接管":"ZR 托管",!game.over,!game.over&&autoplay);btn(990,630,120,"表情",true,false);
  floatingText("← → 移动   A 选牌   B 清选   R 理牌",24,693,14);floatingText("− 规则   ZL 记录",1096,693,14);
  recordResult();
  if(game.over){LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(380,150,520,340,false);text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
@@ -483,7 +483,10 @@ void click(int x,int y){
  if(!screen){for(int i=0;i<4;i++){if(modeAreas[i].contains(x,y)){focus=i;act(CONFIRM);return;}}for(int i=0;i<4;i++)if(navAreas[i].contains(x,y)){focus=i+4;act(CONFIRM);return;}return;}
  if(game.over){if(Area{380,426,185,60}.contains(x,y))act(CONFIRM);else if(Area{570,426,155,60}.contains(x,y))act(BACK);else if(Area{730,426,170,60}.contains(x,y))act(HISTORY);return;}if(Area{1040,14,114,34}.contains(x,y)){act(HISTORY);return;}if(x>1140&&y<66){act(PAUSE);return;}
  struct BtnGeom{int x,y,w;}bs[6]={{210,630,140},{360,630,140},{510,630,180},{700,630,120},{830,630,150},{990,630,120}};Action acts[6]={PASS,HINT,PLAY,SORT,AUTO,EMOTE};
- for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){act(acts[i]);return;}
+ for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){
+  Action a=acts[i];
+  if(i==3&&!selection().empty()){clearSelection();return;}
+  act(a);return;}
  if(Area{730,466,100,28}.contains(x,y)){clearSelection();return;}
  if(game.turn==0&&!autoplay){
   if(organized){auto pos=organizedPositions();int n=game.hands[0].size();
