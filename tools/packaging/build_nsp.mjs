@@ -22,11 +22,10 @@ for (const f of await readdir(resolve(root, 'romfs'))) {
 const nacp = await bin('dist/native/control.nacp');
 const keys = await initializeKeySet(input, globalThis.crypto, 10);
 const result = await buildNsp({
-  keys, plaintext: false, noLogo: false, noPatchNacpLogo: true, keyGeneration: 10,
+  keys, plaintext: true, noLogo: true, noPatchNacpLogo: true, noPatchAcidKey: true, keyGeneration: 10,
   titleId: '010000abcd000000',
   exefs: new Map([['main', main], ['main.npdm', await bin('dist/native/main.npdm')]]),
   control: new Map([['control.nacp', nacp], ['icon_AmericanEnglish.dat', await bin('icon.jpg')]]),
-  logo: new Map([['NintendoLogo.png', await bin('NintendoLogo.png')]]),
   romfs,
 });
 
