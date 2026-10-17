@@ -20,9 +20,9 @@ for (const f of await readdir(resolve(root, 'romfs'))) {
   if (!f.endsWith('.gz')) romfs[f] = new Blob([await bin('romfs/' + f)]);
 }
 const nacp = await bin('dist/native/control.nacp');
-const keys = await initializeKeySet(input, globalThis.crypto, 1);
+const keys = await initializeKeySet(input, globalThis.crypto, 10);
 const result = await buildNsp({
-  keys, plaintext: true, noLogo: false, noPatchNacpLogo: true,
+  keys, plaintext: false, noLogo: false, noPatchNacpLogo: true, keyGeneration: 10,
   titleId: '010000abcd000000',
   exefs: new Map([['main', main], ['main.npdm', await bin('dist/native/main.npdm')]]),
   control: new Map([['control.nacp', nacp], ['icon_AmericanEnglish.dat', await bin('icon.jpg')]]),
@@ -70,8 +70,9 @@ for (const [name, nca] of files) {
     assert.equal(npdm.readBigUInt64LE(npdm.readUInt32LE(0x70) + 0x10), 0x010000abcd000000n);
     const assets = await decode(parsed.sections.find(s => s.romfsData).romfsData);
     for (const name of Object.keys(romfs)) {
-      assert.ok(assets[name] instanceof Blob, 'Missing embedded ' + name);
-      assert.equal(await blobDigest(assets[name]), await blobDigest(romfs[name]), 'Stale asset ' + name);
+      const a = assets[name];
+      assert.ok(a && typeof a.arrayBuffer === 'function', 'Missing embedded ' + name);
+      assert.equal(await blobDigest(a), await blobDigest(romfs[name]), 'Stale asset ' + name);
     }
   } else if (parsed.contentType === 2) {
     const control = await decode(parsed.sections.find(s => s.romfsData).romfsData);
