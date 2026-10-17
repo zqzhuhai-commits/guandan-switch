@@ -312,7 +312,7 @@ void computeOrganizedGroups(){
   for(int i=0;i<5;i++){int r=st+i==1?14:st+i;
    if(rk[r].empty()){ok=false;break;}gc.push_back(rk[r][0]);rk[r].erase(rk[r].begin());}
   if(ok)orgGroups.push_back({gc,"顺子"});
-  else for(int id:gc)for(int r=2;r<=14;r++){if(!std::count(rk[r].begin(),rk[r].end(),id)){auto it=std::find_if(rk[r].begin(),rk[r].end(),[&](int x){return power(Card{x}.rank(),level)>=power(Card{id}.rank(),level);});rk[r].insert(it,id);break;}}
+  else for(int id:gc){int cr=Card{id}.rank();auto it=std::find_if(rk[cr].begin(),rk[cr].end(),[&](int x){return power(Card{x}.rank(),level)>=power(cr,level);});rk[cr].insert(it,id);}
  }
  // 4. Consecutive pairs (三连对)
  for(int st=1;st<=12;st++){
@@ -321,7 +321,7 @@ void computeOrganizedGroups(){
    if(rk[r].size()<2){ok=false;break;}
    gc.push_back(rk[r][0]);gc.push_back(rk[r][1]);rk[r].erase(rk[r].begin(),rk[r].begin()+2);}
   if(ok)orgGroups.push_back({gc,"三连对"});
-  else for(int id:gc)for(int r=2;r<=14;r++){if(!std::count(rk[r].begin(),rk[r].end(),id))rk[r].push_back(id);}
+  else for(int id:gc)rk[Card{id}.rank()].push_back(id);
  }
  // 5. Remaining by rank
  for(int r=2;r<=14;r++)if(!rk[r].empty()){std::string lbl=rk[r].size()==3?"三带":"";orgGroups.push_back({rk[r],lbl});}
@@ -538,11 +538,11 @@ int main(int argc,char**argv){
      for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1]&&!hit;ci++){
       int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
       if(sx>=pos[ci].x&&sx<pos[ci].x+pos[ci].w&&sy>=yy&&sy<yy+pos[ci].h){
-       if(!selected[id]){selected[id]=true;sfx(0);}cursor=ci;hit=true;}}}
+       selected[id]=!selected[id];sfx(0);cursor=ci;hit=true;}}}
    }else{int step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
     for(int i=n-1;i>=0&&!hit;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
      if(sx>=xx+i*step&&sx<xx+i*step+66&&sy>=yy&&sy<yy+104){
-      int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;hit=true;}}}
+      int id=game.hands[0][i];selected[id]=!selected[id];sfx(0);cursor=i;hit=true;}}}
   }
  }
  Uint32 now=SDL_GetTicks();
