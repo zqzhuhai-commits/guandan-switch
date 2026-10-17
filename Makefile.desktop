@@ -2,12 +2,14 @@ CXX ?= g++
 CXXFLAGS += -std=c++17 -O2 -Wall
 SDL_CFLAGS := $(shell pkg-config --cflags sdl2 SDL2_ttf)
 SDL_LIBS := $(shell pkg-config --libs sdl2 SDL2_ttf)
-guandan-desktop: source/main.cpp source/engine.hpp source/stb_image.h
+guandan-desktop: source/main.cpp source/engine.hpp source/hand_layout.hpp source/table_ui.hpp source/stb_image.h
 	$(CXX) $(CXXFLAGS) $(SDL_CFLAGS) source/main.cpp $(SDL_LIBS) -o $@
 .PHONY: test test-ui clean
 test:
 	$(CXX) -std=c++17 -O2 tests/rules.cpp -o rules-test
 	./rules-test
+	$(CXX) -std=c++17 -O2 tests/hand_layout.cpp -o hand-layout-test
+	./hand-layout-test
 test-ui:
 	$(CXX) $(CXXFLAGS) $(SDL_CFLAGS) tests/ui.cpp $(SDL_LIBS) -o ui-test
 	SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./ui-test

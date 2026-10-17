@@ -2,6 +2,7 @@
 // UI re-styled after the feel of Tencent's 大掼蛋 (clean-room: no Tencent assets).
 // Rules engine lives in engine.hpp. This file is the SDL2 presentation layer.
 #include "engine.hpp"
+#include "hand_layout.hpp"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
@@ -34,23 +35,14 @@ struct Skin{Col top,bot,card,btnHover;};
 static Skin skins[3]={ {{12,82,52},{3,32,20},{240,236,222},{26,30,36,235}},   // 翡翠绿
                       {{16,48,92},{6,18,46},{238,240,246},{34,76,124}}, // 深海蓝
                       {{58,34,88},{24,14,42},{246,240,250},{84,54,118}}}; // 午夜紫
-static std::string base="./",fontPath;static int skin=0,speed=1;static bool sound=true,quit=false,autoplay=false,recorder=true,timerOn=true,organized=false;
-static SDL_AudioDeviceID audioDevice=0;static int musicVolume=50,sfxVolume=80;static Game game;static int screen=0,modal=0,focus=0,cursor=0;static bool selected[108]{};
-// 背景音乐引擎 - 程序化中国风五声音阶旋律
-static int musicStep=0;static Uint32 musicNextTick=0;static bool musicPlaying=false;
-static const int MUSIC_BPM=72;static const int MUSIC_STEP_MS=60000/MUSIC_BPM/2; // 八分音符
-// 五声音阶频率 (C D E G A C5 D5 E5 G5)
-static const double PENTA[]={261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.25,783.99};
-// 旋律: 0-8=音阶索引, -1=休止, 高8位标记低音区
-static const int8_t MELODY[]={
-  4,2,0,2, 4,5,4,2, 0,2,4,2, 0,-1,0,-1,
-  5,4,2,4, 5,7,5,4, 2,4,5,4, 2,-1,0,-1,
-  4,2,0,2, 4,5,4,2, 0,2,4,2, 0,2,0,-1,
-  2,4,5,4, 2,0,-1,2, 4,2,0,-1, 0,-1,-1,-1,
-};
-static const int MELODY_LEN=sizeof(MELODY)/sizeof(MELODY[0]);
-static const int8_t BASS[]={0,-1,0,-1, 4,-1,4,-1, 0,-1,0,-1, 2,-1,2,-1};
-static const int BASS_LEN=sizeof(BASS)/sizeof(BASS[0]);
+static std::string base="./",fontPath;static int skin=0,speed=1;static bool sound=true,quit=false,autoplay=false,recorder=true,timerOn=true;
+static bool organized=true,smartGrouped=true,counterOpen=false;
+static int suitFilter=-1,flushIndex=-1;
+static std::vector<int> layoutHand;
+static int layoutLevel=0,layoutRound=0;static bool layoutSmart=false;
+static bool gestureActive=false,gestureValue=false;static bool gestureVisited[108]{};
+void computeOrganizedGroups();void ensureGroups();void restoreHand();
+static SDL_AudioDeviceID audioDevice=0;static Game game;static int screen=0,modal=0,focus=0,cursor=0;static bool selected[108]{};
 static Uint32 lastAI=0,toastUntil=0;static std::string toast;static int total=0,wins=0,bombs=0,statRound=-1;static bool hasSave=false;
 static constexpr Uint32 TURN_MS=18000;
 static Uint32 pausedAt=0;static int pendingMode=0,historyPage=0,hintIndex=-1;
@@ -96,38 +88,29 @@ void trimCache(){if(cache.size()>650){for(auto&kv:cache)SDL_DestroyTexture(kv.se
 std::string rankName(int r){return r==14?"A":r==13?"K":r==12?"Q":r==11?"J":r==17?"大王":r==16?"小王":std::to_string(r);}
 std::string playerName(int p){return p==0?"你":p==1?"南风":p==2?"小满":"青竹";}
 void message(const std::string&s){toast=s;toastUntil=SDL_GetTicks()+2800;}
-void queueTone(int freq,int ms,int vol,bool noise=false){if(!audioDevice||!sound||sfxVolume<=0)return;double gain=sfxVolume/100.0;int n=44100/1000*ms;std::vector<int16_t>s(n*2);for(int i=0;i<n;i++){double t=i/44100.0;double env=1.0-i/double(n);double v=std::sin(6.2831853*freq*t);if(noise)v+=((std::rand()%2001)/1000.0-1.0)*0.8;int16_t x=int16_t(v*vol*env*gain);s[i*2]=x;s[i*2+1]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
-void queueMusicNote(int freq,int ms,int vol){if(!audioDevice||!sound||musicVolume<=0)return;double gain=musicVolume/100.0;int n=44100/1000*ms;std::vector<int16_t>s(n*2);for(int i=0;i<n;i++){double t=i/44100.0;double env=std::min(1.0,i/600.0)*std::min(1.0,(n-i)/800.0);double v=std::sin(6.2831853*freq*t)*0.6+std::sin(6.2831853*freq*2*t)*0.2+std::sin(6.2831853*freq*0.5*t)*0.15;int16_t x=int16_t(v*vol*env*gain);s[i*2]=x;s[i*2+1]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
-void sfx(int kind){if(!audioDevice||!sound)return;
- if(kind==0){queueTone(880,40,800);queueTone(1320,30,500);} // 按钮点击
- else if(kind==1){queueTone(520,60,1600);queueTone(380,50,1200);} // 出牌
- else if(kind==2){queueTone(330,70,1000);queueTone(220,60,800);} // 不要/过牌
- else if(kind==3){queueTone(90,300,2400,true);queueTone(70,200,1800,true);queueTone(150,150,1200);} // 炸弹
- else if(kind==4){queueTone(523,120,1400);queueTone(659,120,1400);queueTone(784,120,1400);queueTone(1047,200,1600);} // 胜利
- else if(kind==5){queueTone(200,150,1000,true);queueTone(150,100,800,true);} // 超时
- else if(kind==6){queueTone(440,30,600);queueTone(550,30,600);queueTone(660,30,600);queueTone(880,60,800);} // 发牌
- else if(kind==7){queueTone(196,200,1200);queueTone(147,200,1000);} // 失败
- else if(kind==8){queueTone(660,80,1000);queueTone(880,80,1000);queueTone(1100,120,1200);} // 同花顺/大牌型
-}
-void musicStart(){musicStep=0;musicNextTick=SDL_GetTicks();musicPlaying=true;}
-void musicStop(){musicPlaying=false;}
-void musicUpdate(){if(!musicPlaying||!audioDevice||!sound||musicVolume<=0)return;Uint32 now=SDL_GetTicks();if(now<musicNextTick)return;if(SDL_GetQueuedAudioSize(audioDevice)>44100*4)return;int idx=musicStep%MELODY_LEN;int note=MELODY[idx];if(note>=0)queueMusicNote((int)PENTA[note],MUSIC_STEP_MS,900);int bassIdx=musicStep%BASS_LEN;int bnote=BASS[bassIdx];if(bnote>=0)queueMusicNote((int)(PENTA[bnote]*0.5),MUSIC_STEP_MS*2,600);musicStep++;musicNextTick=now+MUSIC_STEP_MS;}
+void queueTone(int freq,int ms,int vol,bool noise=false){if(!audioDevice||!sound)return;int n=48000/1000*ms;std::vector<int16_t>s(n);for(int i=0;i<n;i++){double t=i/48000.0;double env=1.0-i/double(n);double v=std::sin(6.2831853*freq*t);if(noise)v+=((std::rand()%2001)/1000.0-1.0)*0.8;int16_t x=int16_t(v*vol*env);s[i]=x;}SDL_QueueAudio(audioDevice,s.data(),s.size()*2);}
+void sfx(int kind){if(!audioDevice||!sound)return;if(kind==0)queueTone(660,55,1200);if(kind==1)queueTone(440,80,1400);if(kind==2)queueTone(300,55,1100);if(kind==3){queueTone(110,260,2000,true);queueTone(90,180,1500,true);}if(kind==4){queueTone(660,110,1400);queueTone(880,110,1400);queueTone(990,160,1400);}if(kind==5)queueTone(220,120,900,true);}
+void beep(){sfx(0);}
 void clearSelection(){std::fill(std::begin(selected),std::end(selected),false);}
-void saveStats(){std::ofstream f(base+"profile.txt");f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn<<' '<<musicVolume<<' '<<sfxVolume;}
+void saveStats(){std::ofstream f(base+"profile.txt");f<<total<<' '<<wins<<' '<<bombs<<' '<<skin<<' '<<speed<<' '<<sound<<' '<<recorder<<' '<<game.difficulty<<' '<<timerOn;}
 void checkpoint(){hasSave=game.save(base+"session.dat");if(!hasSave)message("存档写入失败，请检查 SD 卡空间");}
 void recordResult(){if(game.over&&statRound!=game.round){statRound=game.round;total++;if(game.finish[0]%2==0)wins++;saveStats();}}
-void start(int mode,uint32_t seed=0){int diff=game.difficulty;game.newMatch(mode,seed?seed:mode==3?20261016u:uint32_t(std::time(nullptr)));game.difficulty=diff;screen=1;modal=0;autoplay=false;organized=false;cursor=0;clearSelection();statRound=-1;resetHints();lastOver=false;lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};checkpoint();if(sound&&musicVolume>0)musicStart();sfx(6);}
+void start(int mode,uint32_t seed=0){int diff=game.difficulty;game.newMatch(mode,seed?seed:mode==3?20261016u:uint32_t(std::time(nullptr)));game.difficulty=diff;screen=1;modal=0;autoplay=false;organized=true;smartGrouped=true;suitFilter=-1;layoutHand.clear();cursor=0;clearSelection();statRound=-1;resetHints();lastOver=false;lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};checkpoint();}
 
 // ---------------- cards ----------------
 void cardFace(int id,int x,int y,int w,int h,bool sel,bool focused,bool up=true){
- if(!up){box(x+2,y+5,w,h,7,{0,0,0,55});Col c=skins[skin].card;box(x,y,w,h,7,{0,0,0});box(x+1,y+1,w-2,h-2,6,{Uint8(c.r*0.72),Uint8(c.g*0.72),Uint8(c.b*0.72)});box(x+4,y+4,w-8,h-8,5,{255,255,255,26});int cx=x+w/2,cy=y+h/2;ring(cx,cy,std::min(w,h)/4,3,GOLD_BORDER);line(x+8,y+h-10,x+w-10,y+8,{255,255,255,22});line(x+8,y+8,x+w-10,y+h-10,{255,255,255,22});return;}
- if(sel){y-=18;}box(x+2,y+5,w,h,7,{0,0,0,60});if(sel||focused)box(x-3,y-3,w+6,h+6,9,focused?GOLD:Col{80,200,160});box(x,y,w,h,8,{0,0,0});box(x+1,y+1,w-2,h-2,7,sel?Col{255,246,214}:skins[skin].card);
- hline(x+8,y+h-4,w-16,{176,172,160,65});
- int r=Card{id}.rank(),s=Card{id}.suit();Col c=(s==1||s==2||r==17)?RED:INK;std::string suits[]={"♠","♥","♦","♣",""};
- int rs=w<46?12:w<62?15:w<82?19:24,ss=w<46?11:w<62?14:w<82?17:22;
- if(r>=16){int fs=w<62?16:w<82?20:26;text(r==17?"大":"小",x+4,y+3,fs,c);text("王",x+4,y+3+(w<62?18:24),fs,c);if(w>=62)text("★",x+w-28,y+h-42,24,c);if(w>=62)text("★",x+w-26,y+6,12,c);}
- else{text(rankName(r),x+4,y+2,rs,c);text(suits[s],x+4,y+2+(rs>15?rs-4:rs),ss,c);if(w>=62){text(rankName(r),x+w-4-int(rs*0.6)-8,y+h-rs-4,rs,c);text(suits[s],x+w-4-int(ss*0.6)-8,y+h-ss-4,ss,c);}else{text(suits[s],x+w-26,y+h-38,ss,c);}}
- if(wild(id,game.level)){box(x+w-21,y+4,17,21,4,GOLD);text("配",x+w-19,y+5,11,INK);}
+ if(sel)y-=18;
+ box(x+2,y+3,w,h,7,{14,30,49,50});if(sel||focused)box(x-2,y-2,w+4,h+4,9,sel?Col{255,211,91}:Col{249,223,145});
+ box(x,y,w,h,7,{0,0,0});box(x+1,y+1,w-2,h-2,6,up?(sel?Col{255,248,219}:Col{255,253,244}):Col{54,115,163});
+ if(!up){box(x+5,y+5,w-10,h-10,4,{255,255,255,40});text("掼",x+w/2,y+h/2-13,std::max(12,w/3),WHITE,true);return;}
+ int r=Card{id}.rank(),s=Card{id}.suit();Col c=(s==1||s==2||r==17)?Col{183,35,39}:Col{23,26,32};
+ const char*suits[]={"♠","♥","♦","♣","★"};int fs=w<40?13:w<65?20:std::min(29,w/3),ss=w<40?12:w<65?18:fs;
+ text(r>=16?(r==17?"大":"小"):rankName(r),x+4,y+1,fs,c);
+ text(suits[s],x+(r==10?fs+9:fs+2),y+1,ss,c);
+ if(r>=16){text("王",x+4,y+fs,fs,c);if(w>=62)text("★",x+w/2,y+h-65,40,c,true);}
+ else if(w>=62){text(suits[s],x+w/2+2,y+h-69,std::min(58,w*3/5),c,true);text(rankName(r),x+w-18,y+h-25,17,c,true);}
+ if(wild(id,game.level)){box(x+w-25,y+h-27,21,23,4,{245,181,60});text("配",x+w-15,y+h-25,14,{130,61,18},true);}
+ else if(r==game.level&&w>=62){box(x+4,y+h-23,18,18,3,{66,163,143});text("级",x+13,y+h-23,12,WHITE,true);}
 }
 // ---------------- avatars ----------------
 void loadAvatars(){
@@ -280,117 +263,54 @@ void home(){
  }
  floatingText("选择玩法后，可调整 AI 难度、节奏和倒计时",478,565,15);
 }
-void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+74,14,GOLD,true);}
+void showMove(int p,int cx,int y){auto&m=game.shown[p];if(game.passed[p]){text("不 出",cx,y+16,24,MUTED,true);return;}if(m.kind==NONE)return;int n=m.cards.size(),step=std::min(34,230/std::max(1,n));int x=cx-(step*(n-1)+48)/2;for(int i=0;i<n;i++)cardFace(m.cards[i],x+step*i,y,48,69,false,false);text(kindName(m.kind),cx,y+71,12,WHITE,true);}
 void counterPanel(){
  if(!recorder||game.over||game.mode==2)return;
  box(16,74,306,124,12,{0,0,0,62});text("记牌器",28,80,15,GOLD);
  const char*lab[]={"2","3","4","5","6","7","8","9","10","J","Q","K","A","小王","大王"};int rr[]={2,3,4,5,6,7,8,9,10,11,12,13,14,16,17};
  for(int i=0;i<15;i++){int col=i%8,row=i/8;int x=26+col*37,y=102+row*37;box(x,y,34,32,6,{255,255,255,10});text(lab[i],x+4,y+1,14,CREAM);int n=game.remaining(rr[i]);text(std::to_string(n),x+22,y+12,17,n==0?RED:GOLD);}
 }
-struct HandPos{int x,y,w,h;};
-struct OrganizedGroup{std::vector<int>cards;std::string label;};
-static std::vector<OrganizedGroup> orgGroups;
-static std::vector<int> orgGroupStart;
-void computeOrganizedGroups(){
- auto&hand=game.hands[0];int level=game.level;
- std::array<std::vector<int>,18>rk;std::vector<int>jokers;
- for(int id:hand){int r=Card{id}.rank();if(r>=16)jokers.push_back(id);else rk[r].push_back(id);}
- for(int r=2;r<=14;r++)std::sort(rk[r].begin(),rk[r].end(),[](int a,int b){return Card{a}.suit()<Card{b}.suit();});
- orgGroups.clear();orgGroupStart.clear();
- // 1. Bombs (4+ same rank)
- for(int r=2;r<=14;r++)if(rk[r].size()>=4){orgGroups.push_back({rk[r],std::to_string(rk[r].size())+"炸"});rk[r].clear();}
- // 2. Straight flushes (greedy per suit)
- for(int s=0;s<4;s++)for(int st=1;st<=10;st++){
-  std::vector<int>gc;bool ok=true;
-  for(int i=0;i<5;i++){int r=st+i==1?14:st+i;
-   auto it=std::find_if(rk[r].begin(),rk[r].end(),[&](int id){return Card{id}.suit()==s;});
-   if(it==rk[r].end()){ok=false;break;}gc.push_back(*it);rk[r].erase(it);}
-  if(!ok)for(int id:gc){for(int r=2;r<=14;r++){auto it=std::find(rk[r].begin(),rk[r].end(),id);if(it!=rk[r].end()){rk[r].insert(it,id);break;}}}}
- // 3. Straights (5 consecutive)
- for(int st=1;st<=10;st++){
-  std::vector<int>gc;bool ok=true;
-  for(int i=0;i<5;i++){int r=st+i==1?14:st+i;
-   if(rk[r].empty()){ok=false;break;}gc.push_back(rk[r][0]);rk[r].erase(rk[r].begin());}
-  if(ok)orgGroups.push_back({gc,"顺子"});
-  else for(int id:gc){int cr=Card{id}.rank();auto it=std::find_if(rk[cr].begin(),rk[cr].end(),[&](int x){return power(Card{x}.rank(),level)>=power(cr,level);});rk[cr].insert(it,id);}
- }
- // 4. Consecutive pairs (三连对)
- for(int st=1;st<=12;st++){
-  bool ok=true;std::vector<int>gc;
-  for(int i=0;i<3;i++){int r=st+i==1?14:st+i;
-   if(rk[r].size()<2){ok=false;break;}
-   gc.push_back(rk[r][0]);gc.push_back(rk[r][1]);rk[r].erase(rk[r].begin(),rk[r].begin()+2);}
-  if(ok)orgGroups.push_back({gc,"三连对"});
-  else for(int id:gc)rk[Card{id}.rank()].push_back(id);
- }
- // 5. Remaining by rank
- for(int r=2;r<=14;r++)if(!rk[r].empty()){std::string lbl=rk[r].size()==3?"三带":"";orgGroups.push_back({rk[r],lbl});}
- if(!jokers.empty())orgGroups.push_back({jokers,""});
- // Rebuild hand in group order
- hand.clear();
- for(auto&g:orgGroups)for(int id:g.cards)hand.push_back(id);
- // Compute group start indices
- orgGroupStart.clear();int idx=0;
- for(auto&g:orgGroups){orgGroupStart.push_back(idx);idx+=g.cards.size();}
- orgGroupStart.push_back(idx);
-}
-std::vector<HandPos> organizedPositions(){
- int n=game.hands[0].size();std::vector<HandPos>pos(n);
- int ng=orgGroupStart.size()-1;
- int cw=80,ch=118;
- int colStep=std::max(56,std::min(78,1120/std::max(1,ng)));
- int vStep=42;int totalW=(ng-1)*colStep+cw;int sx=(W-totalW)/2;int baseBottom=598;
- for(int gi=0;gi<ng;gi++){int st=orgGroupStart[gi],en=orgGroupStart[gi+1];
-  for(int ci=st;ci<en;ci++){int layer=ci-st;pos[ci]={sx+gi*colStep,baseBottom-layer*vStep-ch,cw,ch};}}
- return pos;
-}
+#include "table_ui.hpp"
 void table(){
- bgTable();
- floatingText("掼蛋时光",26,14,24,GOLD);
- const char*modes[]={"快速开局","经典升级","明牌练习","定局挑战"};floatingText(modes[game.mode],176,21,17);floatingText("第 "+std::to_string(game.round)+" 局",330,21,17);
- floatingText("本局打 "+rankName(game.level),646,17,26,GOLD,true);
- floatingText("我方 "+rankName(game.levels[0])+"   :   对方 "+rankName(game.levels[1]),880,22,18);floatingText("+ 暂停",1174,22,15);floatingText("ZL 记录",1097,20,17,WHITE,true);
- counterPanel();
- Uint32 now=SDL_GetTicks();
- auto fin=[&](int p){return game.hands[p].empty();};
- drawAvatar(2,game.mode==2?320:640,game.mode==2?108:118,26,game.turn==2&&!game.over,game.passed[2],fin(2));
- text(std::to_string(game.hands[2].size())+" 张",game.mode==2?300:706,game.mode==2?166:104,18,GOLD);
- drawAvatar(1,96,game.mode==2?372:300,game.mode==2?26:36,game.turn==1&&!game.over,game.passed[1],fin(1));
- text(std::to_string(game.hands[1].size())+" 张",96,game.mode==2?434:380,18,GOLD,true);
- drawAvatar(3,1184,game.mode==2?372:300,game.mode==2?26:36,game.turn==3&&!game.over,game.passed[3],fin(3));
- text(std::to_string(game.hands[3].size())+" 张",1184,game.mode==2?434:380,18,GOLD,true);
- if(game.mode==2){for(int p=1;p<4;p++){int x=p==1?26:p==3?1066:365,y=p==2?88:96;for(int i=0;i<int(game.hands[p].size());i++){int cols=p==2?27:6,col=i%cols,row=i/cols;cardFace(game.hands[p][i],x+col*(p==2?20:28),y+row*50,35,49,false,false);}}}
- else for(int p:{1,3}){int x=p==1?60:1160;for(int i=0;i<5;i++){int xx=x+i*5;box(xx,206+i*3,34,52,5,{40,80,64});line(xx+8,216+i*3,xx+26,248+i*3,GOLD_BORDER);}}
- showMove(2,640,196);showMove(1,250,288);showMove(3,1030,288);showMove(0,640,330);
- if(game.mode!=2)floatingText("对家：小满",443,80,15,{164,218,255},true);
- if(game.table.kind==NONE)text("自 由 领 出",640,262,22,{207,221,204,150},true);
- text("掼蛋时光",640,296,26,{246,198,74,18},true);
- if(!game.over){std::string st=game.turn==0?(autoplay?"正在托管 · 自动出牌":"轮到你出牌"):playerName(game.turn)+" 正在思考";text(st,640,424,21,game.turn==0?GOLD:MUTED,true);if(game.turn!=0){for(int i=0;i<3;i++)circle(640-30+i*30,457,3,i==int(now/350)%3?GOLD:Col{70,108,99});}}
- drawAvatar(0,260,452,30,game.turn==0&&!game.over&&!autoplay,game.passed[0],fin(0));
- text("你 · "+std::to_string(game.hands[0].size())+" 张",296,442,17,CREAM);
- if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0){float el=float(now-lastAI)/float(TURN_MS);if(el<1){arc(197,452,23,4,-1.57f,-1.57f+6.2832f*el,GOLD);text(std::to_string(std::max(0,int((TURN_MS-(now-lastAI))/1000))),197,443,17,GOLD,true);}}
- auto chosen=selection();Move preview=identify(chosen,game.level,game.table);if(!chosen.empty()){std::string label="已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"无法出牌":std::string(kindName(preview.kind)));text(label,640,478,17,preview.kind==NONE?Col{255,151,151}:GOLD,true);}
- for(int p=1;p<4;p++)if(!fin(p)&&game.hands[p].size()<=5)text("余 "+std::to_string(game.hands[p].size())+" 张！",p==1?96:p==2?790:1184,p==2?166:(game.mode==2?458:374),18,{255,180,106},true);
- int n=game.hands[0].size();
- if(organized&&n>0){auto pos=organizedPositions();
-  for(int gi=0;gi<(int)orgGroupStart.size()-1;gi++){
-   for(int ci=orgGroupStart[gi+1]-1;ci>=orgGroupStart[gi];ci--){
-    int id=game.hands[0][ci];int x=pos[ci].x,y=pos[ci].y;
-    if(selected[id])y-=18;bool focused=ci==cursor&&game.turn==0&&!autoplay&&!game.over;
-    cardFace(id,x,y,pos[ci].w,pos[ci].h,selected[id],focused);}
-   // Draw group label below column
-   if(!orgGroups[gi].label.empty()){
-    int lx=pos[orgGroupStart[gi]].x+pos[orgGroupStart[gi]].w/2;
-    text(orgGroups[gi].label,lx,606,13,{180,220,255},true);}
-  }
- }else{int step=std::min(58,1138/std::max(1,n-1)),x=(W-(step*std::max(0,n-1)+66))/2;
-  for(int i=0;i<n;i++)cardFace(game.hands[0][i],x+i*step,513,66,104,selected[game.hands[0][i]],i==cursor&&game.turn==0&&!autoplay&&!game.over);}
- if(game.mode==2)text("明牌练习 · 其余三家手牌可见",640,502,15,{207,221,204,130},true);
- drawFx(now);
- auto btn=[&](int bx,int by,int bw,const std::string&l,bool en,bool act){box(bx,by,bw,48,14,act?GOLD:en?Col{255,255,255,20}:Col{255,255,255,7});text(l,bx+bw/2,by+9,20,act?INK:en?CREAM:MUTED,true);};
- bool my=game.turn==0&&!game.over&&!autoplay;
- btn(210,630,140,"L 不出",game.table.kind!=NONE&&my,false);btn(360,630,140,"Y 提示",my,false);btn(510,630,180,"X 出牌",my&&preview.kind!=NONE,my&&preview.kind!=NONE);if(!chosen.empty())btn(700,630,120,"✕ 清空",my,false);else btn(700,630,120,organized?"恢复平铺":"一键理牌",true,false);btn(830,630,150,autoplay?"ZR 接管":"ZR 托管",!game.over,!game.over&&autoplay);btn(990,630,120,"表情",true,false);
- floatingText("← → 移动   A 选牌   B 清选   R 理牌",24,693,14);floatingText("− 规则   ZL 记录",1096,693,14);
+ referenceScene();Uint32 now=SDL_GetTicks();ensureGroups();
+ box(20,14,155,42,8,{255,250,226,245});text("本局打",33,21,22,{151,103,39});text(rankName(game.level),145,16,32,{157,77,26},true);
+ int bombCount=0;for(const auto&r:game.history)if(r.move.explosive())bombCount++;
+ box(185,14,146,42,8,{22,51,92,170});text("炸弹倍数",199,24,16,WHITE);text("×"+std::to_string(1<<std::min(bombCount,10)),297,19,24,GOLD,true);
+ floatingText("第 "+std::to_string(game.round)+" 局",350,24,18,WHITE);
+ pill(1048,14,108,42,"记牌器",false,true,18);pill(1170,14,90,42,"更多",false,true,18);
+ time_t tmNow=std::time(nullptr);auto*local=std::localtime(&tmNow);char tmText[12]="";if(local)std::strftime(tmText,sizeof(tmText),"%H:%M",local);floatingText(tmText,1210,68,17,WHITE,true);
+ floatingText("我方 "+rankName(game.levels[0])+"  :  对方 "+rankName(game.levels[1]),82,72,16,WHITE,true);
+ tableSeat(2,460,91,true);tableSeat(1,72,232);tableSeat(3,1208,232);
+ if(!game.over){if(game.turn==1)clockBadge(158,227,now);else if(game.turn==2)clockBadge(536,87,now);else if(game.turn==3)clockBadge(1125,227,now);}
+ showMove(2,705,game.mode==2?185:94);showMove(1,263,205);showMove(3,1012,205);
+ // Own last move stays in a corner; it cannot cover the playable hand.
+ if(game.shown[0].kind!=NONE||game.passed[0])showMove(0,88,438);
+ if(game.mode==2){
+  for(int p=1;p<4;p++){int n=game.hands[p].size(),sx=p==2?500:p==1?18:916;
+   for(int i=0;i<n;i++)cardFace(game.hands[p][i],sx+i*12,125,30,44,false,false);}
+ }
+
+ auto chosen=selection();Move preview=identify(chosen,game.level,game.table);bool my=game.turn==0&&!game.over&&!autoplay;
+ if(my){clockBadge(403,289,now);pill(445,266,125,46,"L 不出",false,game.table.kind!=NONE);pill(586,266,125,46,"Y 提示",false);pill(728,266,150,46,"X 出牌",true,preview.kind!=NONE);pill(894,266,94,46,"清空",false,!chosen.empty(),18);}
+ else if(!game.over){floatingText(autoplay?"正在托管 · ZR 接管":playerName(game.turn)+"正在出牌 · 可预选手牌",705,287,19,WHITE,true);}
+ if(!chosen.empty())floatingText("已选 "+std::to_string(chosen.size())+" 张 · "+(preview.kind==NONE?"请按合法牌型选择":std::string(kindName(preview.kind))),705,322,16,preview.kind==NONE?Col{255,226,196}:WHITE,true);
+ else if(my)floatingText(game.table.kind==NONE?"自由领出 · 请选择手牌":"轮到你出牌",705,322,16,WHITE,true);
+ auto pos=handPositions();
+ for(int i=0;i<int(pos.size());i++){
+  int id=game.hands[0][i];auto a=pos[i];cardFace(id,a.x,a.y,a.w,a.h,selected[id],i==cursor&&!autoplay&&!game.over);
+  if(suitFilter>=0&&Card{id}.suit()!=suitFilter&&!wild(id,game.level))box(a.x+1,a.y-(selected[id]?18:0)+1,a.w-2,a.h-2,7,{41,65,95,102});
+ }
+ if(organized){for(size_t g=0;g<orgGroups.size();g++){auto a=pos[orgGroupStart[g]];if(!orgGroups[g].label.empty()){int tw=std::min(a.w,88);box(a.x,632,tw,21,4,orgGroups[g].kind>=BOMB?Col{120,85,167,232}:Col{32,131,141,225});text(orgGroups[g].label,a.x+tw/2,633,13,WHITE,true);}}}
+ tableSeat(0,57,615);floatingText("手牌 "+std::to_string(game.hands[0].size())+" 张",112,638,16,WHITE,true);
+ // A gradient keeps the complete scene visible behind the toolbar.
+ for(int y=652;y<H;y++)rect(0,y,W,1,{17,35,63,Uint8(80+(y-652)*2)});
+ floatingText("同花顺",270,671,22,WHITE,true);
+ const char*suits[]={"♠","♥","♦","♣"};
+ for(int i=0;i<4;i++){int x=338+i*55;if(suitFilter==i)box(x-22,660,44,43,12,{255,255,255,100});text(suits[i],x,662,31,i==1||i==2?Col{254,167,143}:WHITE,true);}
+ pill(548,663,120,42,"恢复",true,true,21);pill(683,663,176,42,"R 一键理牌",false,true,21);
+ pill(875,663,113,42,autoplay?"接管":"托管",false,!game.over,20);pill(1004,663,88,42,"表情",true,!game.over,20);pill(1106,663,150,42,"ZL 出牌记录",false,true,17);
+ floatingText("↑↓ 选层  ←→ 换列",130,707,11,WHITE);floatingText("A 选牌  B 清选  RS 恢复  LS 花色",629,707,11,WHITE,true);
+ referenceCounter();
  recordResult();
  if(game.over){LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(380,150,520,340,false);text(game.finish[0]%2==0?"配合漂亮！":"再来一局",640,180,42,GOLD,true);text(game.notice,640,244,20,CREAM,true);
   int teamUp=0;if(game.mode==1){int tf=game.finish[0]%2;int place=0;for(int i=1;i<4;i++)if(game.finish[i]%2==tf)place=i;teamUp=4-place;}
@@ -403,8 +323,8 @@ void overlay(){
  if(!modal)return;
  LightPanelScope palette;rect(0,0,W,H,{2,10,16,60});panelFrame(210,84,860,548);
  if(modal==1){text("暂停片刻",254,116,34,GOLD);const char*items[]={"继续对局","保存并返回大厅","偏好设置","玩法说明"};for(int i=0;i<4;i++)button(340,196+i*80,600,items[i],focus==i);}
- if(modal==2){text("偏好设置",254,116,34,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","总音效","记牌器","出牌倒计时","背景音乐","音效音量"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"原色夜景":skin==1?"深海蓝":"午夜紫",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭",std::to_string(musicVolume)+"%",std::to_string(sfxVolume)+"%"};for(int i=0;i<8;i++){int y=160+i*62;if(i<6){choiceRow(315,y,650,labels[i],values[i],focus==i);}else{box(315,y+4,650,44,10,{8,16,28,200});text(labels[i],340,y+15,18,focus==i?GOLD:WHITE);int barX=560,barW=360,barH=10;box(barX,y+20,barW,barH,5,{40,50,70,255});int fillW=barW*(i==6?musicVolume:sfxVolume)/100;box(barX,y+20,fillW,barH,5,{80,200,160,255});text(values[i],930,y+15,18,{180,220,200},true);if(focus==i)box(312,y+1,656,50,12,GOLD);}}text("A 切换 / ←→ 调音量   B 返回",640,670,17,MUTED,true);}
- if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","← → 移动光标，A 选牌，X 出牌，B 清选，Y 切换提示，R 理牌。","L 不出，ZR 托管，ZL 出牌记录，+ 暂停，− 本页。","掌机支持点按选牌和按钮；倒计时结束自动出牌。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
+ if(modal==2){text("偏好设置",254,116,34,GOLD);const char*labels[]={"AI 难度","牌桌主题","出牌节奏","操作音效","记牌器","出牌倒计时"};std::string values[]={game.difficulty==0?"休闲":game.difficulty==1?"标准":"进阶",skin==0?"原色夜景":skin==1?"深海蓝":"午夜紫",speed==0?"舒缓":speed==1?"标准":"快速",sound?"开启":"关闭",recorder?"开启":"关闭",timerOn?"开启":"关闭"};for(int i=0;i<6;i++)choiceRow(315,180+i*70,650,labels[i],values[i],focus==i);text("A 切换选项   B 返回",640,600,17,MUTED,true);}
+ if(modal==3){text("玩法与操作",254,110,32,GOLD);const char*rules[]={"四人两副牌，对家组队。红桃级牌（逢人配）可代替非王牌。","牌型：单张 / 对子 / 三张 / 三带二 / 五张顺子 / 三连对 / 钢板。","炸弹：四至五张 < 同花顺 < 六张及以上；四王最大。","顺子中级牌回归原点数；A 可在开头或末尾，不循环。","头游一方按队友名次升 3 / 2 / 1 级；打 A 且队友非末游获胜。","升级赛自动进贡并还最低非配牌；双大王可抗贡。","↑↓ 选层，←→ 换列，A 选牌，X 出牌，B 清选，Y 提示。","R 一键理牌，RS 恢复按点数，LS 花色，L 不出，ZR 托管。","点按牌型标签可整组选择；滑动多选；底部可查找同花顺。","进阶 AI 为规则启发式策略；定局挑战可重试相同发牌。"};for(int i=0;i<10;i++)text(rules[i],254,168+i*37,18,i<6?CREAM:MUTED);}
  if(modal==4){text("本地战绩",254,116,34,GOLD);std::string v[]={std::to_string(total),std::to_string(wins),total?std::to_string(wins*100/total)+"%":"—",std::to_string(bombs)};const char*l[]={"完成对局","我方获胜","本地胜率","打出炸弹"};for(int i=0;i<4;i++){int x=330+(i%2)*340,y=200+(i/2)*150;box(x-28,y-12,280,126,16,{255,255,255,205});circle(x+206,y+24,17,{233,223,185});text("★",x+206,y+11,18,GOLD,true);text(v[i],x,y,46,CREAM);text(l[i],x,y+63,20,MUTED);}text("B 返回   ·   数据仅保存在本机",640,570,17,MUTED,true);}
  if(modal==5){text("出牌记录",254,116,34,GOLD);int pages=std::max(1,(int(game.history.size())+4)/5);historyPage=std::clamp(historyPage,0,pages-1);text("第 "+std::to_string(historyPage+1)+" / "+std::to_string(pages)+" 页",840,132,17,MUTED);
   if(game.history.empty())text("尚无出牌记录 · 旧版本存档从恢复后开始记录",640,300,21,CREAM,true);
@@ -423,132 +343,102 @@ void overlay(){
   text("B 返回",940,568,17,MUTED);}
 }
 // ---------------- actions ----------------
-void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(m.kind==NONE){message("牌型不合法：当前选了"+std::to_string(cards.size())+"张");return;}if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();if(organized)computeOrganizedGroups();cursor=0;lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
+void doPlay(){if(game.turn!=0||game.over||autoplay)return;std::vector<int>cards;for(int id:game.hands[0])if(selected[id])cards.push_back(id);if(cards.empty()){message("先选中要打出的牌");return;}Move m=identify(cards,game.level,game.table);if(game.play(0,cards)){if(m.explosive())bombs++;sfx(m.explosive()?3:1);clearSelection();cursor=std::min(cursor,int(game.hands[0].size())-1);lastAI=SDL_GetTicks();checkpoint();}else message("牌型不合法，或无法压过上一手");}
 void doHint(){if(game.turn!=0||game.over||autoplay)return;
  if(hintIndex<0||hintAction!=game.history.size()||hintSeed!=game.seed||hintRound!=game.round){hintOptions=moves(game.hands[0],game.level,game.table);std::stable_sort(hintOptions.begin(),hintOptions.end(),[](const Move&a,const Move&b){if(a.explosive()!=b.explosive())return !a.explosive();if(a.cards.size()!=b.cards.size())return a.cards.size()>b.cards.size();return a.high<b.high;});Move recommended=game.hint(0);if(recommended.kind==NONE&&game.table.kind!=NONE)hintOptions.insert(hintOptions.begin(),recommended);else{auto it=std::find_if(hintOptions.begin(),hintOptions.end(),[&](const Move&m){auto a=m.cards,b=recommended.cards;std::sort(a.begin(),a.end());std::sort(b.begin(),b.end());return a==b;});if(it!=hintOptions.end())std::rotate(hintOptions.begin(),it,it+1);}hintAction=game.history.size();hintSeed=game.seed;hintRound=game.round;hintIndex=-1;}
  clearSelection();if(hintOptions.empty()){message("没有可压过的牌，按 L 不出");return;}hintIndex=(hintIndex+1)%int(hintOptions.size());auto&m=hintOptions[hintIndex];for(int id:m.cards)selected[id]=true;message(std::to_string(hintIndex+1)+" / "+std::to_string(hintOptions.size())+" · "+(m.kind==NONE?std::string("建议不出，按 L 执行"):std::string(kindName(m.kind))+"，按 X 出牌")+" · Y 换一组");}
 void doAutoMove(){Move m=game.hint(0);if(m.kind==NONE){if(game.table.kind==NONE){auto ms=moves(game.hands[0],game.level);if(!ms.empty())game.play(0,ms.front().cards);}else game.pass(0);}else if(game.play(0,m.cards)&&m.explosive())bombs++;clearSelection();cursor=0;}
-enum Action{LEFT,RIGHT,UP,DOWN,CONFIRM,BACK,PLAY,HINT,PASS,SORT,AUTO,PAUSE,HELP,HISTORY,EMOTE};
+enum Action{LEFT,RIGHT,UP,DOWN,CONFIRM,BACK,PLAY,HINT,PASS,SORT,AUTO,PAUSE,HELP,HISTORY,EMOTE,RESTORE,SUIT,FLUSH_FIND,COUNTER};
 void act(Action a){
  if(modal){
   if(a==BACK||a==PAUSE){setModal(0);focus=0;sfx(2);return;}
-  int max=modal==1?4:modal==2?8:modal==6?8:modal==8?4:1;
+  int max=modal==1?4:modal==2?6:modal==6?8:modal==8?4:1;
   if(modal==5){int pages=std::max(1,(int(game.history.size())+4)/5);if(a==LEFT||a==UP)historyPage=std::min(pages-1,historyPage+1);if(a==RIGHT||a==DOWN)historyPage=std::max(0,historyPage-1);return;}
   if(modal==6){if(a==LEFT||a==UP)focus=(focus+7)%8;if(a==RIGHT||a==DOWN)focus=(focus+1)%8;}
-  else if(modal==2&&(a==LEFT||a==RIGHT)){if(focus==6){musicVolume=std::clamp(musicVolume+(a==RIGHT?10:-10),0,100);if(musicVolume>0&&!musicPlaying)musicStart();}if(focus==7){sfxVolume=std::clamp(sfxVolume+(a==RIGHT?10:-10),0,100);sfx(0);}saveStats();return;}
   else{if(a==UP)focus=(focus+max-1)%max;if(a==DOWN)focus=(focus+1)%max;}
   if(a==CONFIRM){
    if(modal==1){if(focus==0)setModal(0);else if(focus==1){checkpoint();screen=0;setModal(0);focus=4;}else if(focus==2){setModal(2);focus=0;}else{setModal(3);focus=0;}}
-   else if(modal==2){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)skin=(skin+1)%3;if(focus==2)speed=(speed+1)%3;if(focus==3){sound=!sound;if(sound&&musicVolume>0)musicStart();if(!sound)musicStop();}if(focus==4)recorder=!recorder;if(focus==5)timerOn=!timerOn;if(focus==6){musicVolume=(musicVolume+10)%110;if(musicVolume==0)musicVolume=100;if(musicVolume>0&&!musicPlaying)musicStart();}if(focus==7){sfxVolume=(sfxVolume+10)%110;if(sfxVolume==0)sfxVolume=100;sfx(0);}saveStats();if(screen)checkpoint();sfx(0);}
+   else if(modal==2){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)skin=(skin+1)%3;if(focus==2)speed=(speed+1)%3;if(focus==3)sound=!sound;if(focus==4)recorder=!recorder;if(focus==5)timerOn=!timerOn;saveStats();if(screen)checkpoint();sfx(0);}
    else if(modal==8){if(focus==0)game.difficulty=(game.difficulty+1)%3;if(focus==1)speed=(speed+1)%3;if(focus==2)timerOn=!timerOn;saveStats();if(focus==3){setModal(0);start(pendingMode);}sfx(0);}
    else if(modal==6){const char*em[]={"打得漂亮！","不要走，决战到天亮","快点吧，等得花儿都谢了","你太厉害了！","稳住，我们能赢！","这牌，绝了！","别急，容我想想","配合默契，双喜临门！"};addFx(FX_EMOTE,0,0,300,540,{},em[focus]);sfx(0);setModal(0);focus=0;}
   }
   return;
  }
  if(!screen){if(a==LEFT)focus=focus<4?(focus^1):4+(focus-4+3)%4;if(a==RIGHT)focus=focus<4?(focus^1):4+(focus-4+1)%4;if(a==UP)focus=focus<2?4+focus:focus<4?focus-2:2+(focus-4)/2;if(a==DOWN)focus=focus<2?focus+2:focus<4?4+(focus-2)*2:(focus-4)/2;if(a==PAUSE){quit=true;return;}if(a==HELP){setModal(3);focus=0;return;}
-  if(a==CONFIRM){sfx(0);if(focus<4){pendingMode=focus;setModal(8);focus=3;}else if(focus==4){if(hasSave){Game g;if(g.load(base+"session.dat")){game=g;screen=1;autoplay=false;organized=false;clearSelection();cursor=0;lastAI=SDL_GetTicks();statRound=game.over?game.round:-1;resetHints();lastOver=game.over;fxList.clear();lastShown={};lastPassed={};}else message("存档无法读取");}}else{setModal(focus==5?4:focus==6?2:3);focus=0;}}return;}
- if(a==PAUSE){checkpoint();setModal(1);focus=0;sfx(0);return;}if(a==HELP){setModal(3);focus=0;return;}if(a==HISTORY){setModal(game.over?7:5);historyPage=0;focus=0;return;}if(a==EMOTE){if(game.over)return;setModal(6);focus=0;return;}
- if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();statRound=-1;resetHints();lastOver=false;organized=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
+  if(a==CONFIRM){sfx(0);if(focus<4){pendingMode=focus;setModal(8);focus=3;}else if(focus==4){if(hasSave){Game g;if(g.load(base+"session.dat")){game=g;screen=1;autoplay=false;clearSelection();cursor=0;lastAI=SDL_GetTicks();statRound=game.over?game.round:-1;resetHints();lastOver=game.over;fxList.clear();lastShown={};lastPassed={};}else message("存档无法读取");}}else{setModal(focus==5?4:focus==6?2:3);focus=0;}}return;}
+ if(a==PAUSE){checkpoint();setModal(1);focus=0;sfx(0);return;}if(a==HELP){setModal(3);focus=0;return;}if(a==COUNTER){if(!recorder){recorder=true;saveStats();}counterOpen=!counterOpen;return;}if(a==HISTORY){setModal(game.over?7:5);historyPage=0;focus=0;return;}if(a==EMOTE){if(game.over)return;setModal(6);focus=0;return;}
+ if(game.over){if(a==CONFIRM){if(game.champion)start(game.mode);else{game.deal();organized=true;smartGrouped=true;suitFilter=-1;layoutHand.clear();statRound=-1;resetHints();lastOver=false;clearSelection();cursor=0;checkpoint();lastAI=SDL_GetTicks();fxList.clear();lastShown={};lastPassed={};}}if(a==BACK){screen=0;focus=0;}return;}
  if(a==AUTO){autoplay=!autoplay;clearSelection();message(autoplay?"托管已开启，按 ZR 取消":"已取消托管");sfx(0);lastAI=SDL_GetTicks();return;}
- if(game.turn!=0||autoplay){return;}int n=game.hands[0].size();
- if(organized&&n>0){
-  // 理牌模式：上下在列内移动，左右切换列
-  int gi=0;for(int g=0;g<(int)orgGroupStart.size()-1;g++){if(cursor>=orgGroupStart[g]&&cursor<orgGroupStart[g+1]){gi=g;break;}}
-  int gst=orgGroupStart[gi],gen=orgGroupStart[gi+1];int layer=cursor-gst;
-  if(a==UP&&n){ // 向上 = 同列上层
-   if(layer<gen-gst-1)cursor++;
-  }else if(a==DOWN&&n){ // 向下 = 同列下层
-   if(layer>0)cursor--;
-  }else if(a==LEFT&&n){ // 左切列
-   if(gi>0){int ng=gi-1;int maxL=orgGroupStart[ng+1]-orgGroupStart[ng]-1;cursor=orgGroupStart[ng]+std::min(layer,maxL);}
-  }else if(a==RIGHT&&n){ // 右切列
-   if(gi<(int)orgGroupStart.size()-2){int ng=gi+1;int maxL=orgGroupStart[ng+1]-orgGroupStart[ng]-1;cursor=orgGroupStart[ng]+std::min(layer,maxL);}
-  }
- }else{
-  if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;
- }
- if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}if(a==BACK)clearSelection();if(a==HINT)doHint();if(a==PLAY)doPlay();if(a==PASS){if(game.pass(0)){clearSelection();if(organized)computeOrganizedGroups();cursor=0;lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}if(a==SORT){game.sort();organized=!organized;if(organized)computeOrganizedGroups();clearSelection();cursor=0;message(organized?"一键理牌：炸弹/同花顺/顺子已分组标注":"已恢复平铺排列");sfx(0);}
+ if(a==RESTORE){restoreHand();sfx(0);return;}
+ if(a==SORT){organized=true;smartGrouped=true;suitFilter=-1;clearSelection();computeOrganizedGroups();cursor=0;message("一键理牌：同花顺、炸弹、连对与顺子已分列");sfx(0);return;}
+ if(a==SUIT){suitFilter=suitFilter==3?-1:suitFilter+1;flushIndex=-1;return;}
+ if(a==FLUSH_FIND){if(!autoplay)findStraightFlush();return;}
+ if(a==BACK){clearSelection();return;}
+ if(autoplay)return;
+ ensureGroups();int n=int(game.hands[0].size());
+ if(organized&&n){int g=0;while(g+1<int(orgGroupStart.size())-1&&cursor>=orgGroupStart[g+1])g++;int row=cursor-orgGroupStart[g];
+  if(a==UP)cursor=std::max(orgGroupStart[g],cursor-1);
+  if(a==DOWN)cursor=std::min(orgGroupStart[g+1]-1,cursor+1);
+  if(a==LEFT||a==RIGHT){int dest=(g+(a==RIGHT?1:int(orgGroups.size())-1))%int(orgGroups.size());cursor=orgGroupStart[dest]+std::min(row,orgGroupStart[dest+1]-orgGroupStart[dest]-1);}
+ }else{if(a==LEFT&&n)cursor=(cursor+n-1)%n;if(a==RIGHT&&n)cursor=(cursor+1)%n;}
+ if(a==CONFIRM&&n){selected[game.hands[0][cursor]]=!selected[game.hands[0][cursor]];sfx(0);}
+ if(game.turn!=0)return;
+ if(a==HINT)doHint();
+ if(a==PLAY)doPlay();
+ if(a==PASS){if(game.pass(0)){clearSelection();lastAI=SDL_GetTicks();sfx(2);checkpoint();}else message("自由领出时必须出牌");}
+
 }
 void click(int x,int y){
  if(modal){
   if(Area{945,96,112,54}.contains(x,y)){act(BACK);return;}
   if(modal==5){if(Area{290,562,250,48}.contains(x,y))act(LEFT);else if(Area{740,562,250,48}.contains(x,y))act(RIGHT);return;}
-  int count=modal==1?4:modal==2?8:modal==8?4:modal==6?8:0;
+  int count=modal==1?4:modal==2?6:modal==8?4:modal==6?8:0;
   for(int i=0;i<count;i++){
-   Area area=modal==1?Area{340,196+i*80,600,48}:modal==2?Area{315,160+i*62,650,48}:modal==8?Area{315,190+i*78,650,48}:Area{330+(i%2)*330,196+(i/2)*84,300,48};
+   Area area=modal==1?Area{340,196+i*80,600,48}:modal==2?Area{315,180+i*70,650,48}:modal==8?Area{315,190+i*78,650,48}:Area{330+(i%2)*330,196+(i/2)*84,300,48};
    if(area.contains(x,y)){focus=i;act(CONFIRM);return;}
   }
   return;
  }
  if(!screen){for(int i=0;i<4;i++){if(modeAreas[i].contains(x,y)){focus=i;act(CONFIRM);return;}}for(int i=0;i<4;i++)if(navAreas[i].contains(x,y)){focus=i+4;act(CONFIRM);return;}return;}
- if(game.over){if(Area{380,426,185,60}.contains(x,y))act(CONFIRM);else if(Area{570,426,155,60}.contains(x,y))act(BACK);else if(Area{730,426,170,60}.contains(x,y))act(HISTORY);return;}if(Area{1040,14,114,34}.contains(x,y)){act(HISTORY);return;}if(x>1140&&y<66){act(PAUSE);return;}
- struct BtnGeom{int x,y,w;}bs[6]={{210,630,140},{360,630,140},{510,630,180},{700,630,120},{830,630,150},{990,630,120}};Action acts[6]={PASS,HINT,PLAY,SORT,AUTO,EMOTE};
- for(int i=0;i<6;i++)if(x>=bs[i].x&&x<bs[i].x+bs[i].w&&y>=bs[i].y&&y<bs[i].y+48){
-  Action a=acts[i];
-  if(i==3&&!selection().empty()){clearSelection();return;}
-  act(a);return;}
- if(Area{730,466,100,28}.contains(x,y)){clearSelection();return;}
- if(game.turn==0&&!autoplay){
-  if(organized){auto pos=organizedPositions();int n=game.hands[0].size();
-   for(int gi=(int)orgGroupStart.size()-2;gi>=0;gi--){
-    for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1];ci++){
-     int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
-     if(x>=pos[ci].x&&x<pos[ci].x+pos[ci].w&&y>=yy&&y<yy+pos[ci].h){cursor=ci;act(CONFIRM);return;}}}}
-  else{int n=game.hands[0].size(),step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
-   for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
-    if(x>=xx+i*step&&x<xx+i*step+66&&y>=yy&&y<yy+104){cursor=i;act(CONFIRM);return;}}}}
+ if(game.over){if(Area{380,426,185,60}.contains(x,y))act(CONFIRM);else if(Area{570,426,155,60}.contains(x,y))act(BACK);else if(Area{730,426,170,60}.contains(x,y))act(HISTORY);return;}if(Area{1048,14,108,42}.contains(x,y)){act(COUNTER);return;}if(Area{1170,14,90,42}.contains(x,y)){act(PAUSE);return;}
+ const Area mainButtons[]={{445,266,125,46},{586,266,125,46},{728,266,150,46},{894,266,94,46}};
+ const Action mainActions[]={PASS,HINT,PLAY,BACK};
+ if(game.turn==0&&!autoplay)for(int i=0;i<4;i++)if(mainButtons[i].contains(x,y)){act(mainActions[i]);return;}
+ if(Area{211,660,103,46}.contains(x,y)){act(FLUSH_FIND);return;}
+ for(int i=0;i<4;i++)if(Area{316+i*55,660,44,43}.contains(x,y)){suitFilter=suitFilter==i?-1:i;flushIndex=-1;sfx(0);return;}
+ const Area bottom[]={{548,663,120,42},{683,663,176,42},{875,663,113,42},{1004,663,88,42},{1106,663,150,42}};
+ const Action bottomActions[]={RESTORE,SORT,AUTO,EMOTE,HISTORY};for(int i=0;i<5;i++)if(bottom[i].contains(x,y)){act(bottomActions[i]);return;}
+ if(organized&&y>=632&&y<654&&!autoplay){ensureGroups();auto pos=organizedPositions();for(size_t g=0;g<orgGroups.size();g++){auto a=pos[orgGroupStart[g]];if(Area{a.x,632,std::min(a.w,88),21}.contains(x,y)){bool all=true;for(int id:orgGroups[g].cards)all&=selected[id];for(int id:orgGroups[g].cards)selected[id]=!all;sfx(0);return;}}}
+ beginHandGesture(x,y);
+
 }
-int main(int argc,char**argv){
- bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
- for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
+int main(int argc,char**argv){bool capture=false,captureGame=false,captureOver=false,smoke=false,reviewMode=false;int layoutCapture=0;int captureMode=0,captureModal=0;std::string capturePath="preview.bmp";
+ for(int i=1;i<argc;i++){std::string s=argv[i];if(s=="--capture-restored"){layoutCapture=1;s="--capture-game";}if(s=="--capture-selected"){layoutCapture=2;s="--capture-game";}if(s=="--capture-counter"){layoutCapture=3;s="--capture-game";}if(s=="--capture-flat"){layoutCapture=4;s="--capture-game";}if(s=="--capture-training"){captureMode=2;s="--capture-game";}if(s=="--capture-help"){captureModal=3;s="--capture";}if(s=="--capture-stats"){captureModal=4;s="--capture";}if(s=="--capture-pause"){captureModal=1;s="--capture-game";}if(s=="--capture-settings"){captureModal=2;s="--capture";}if(s=="--capture-emote"){captureModal=6;s="--capture-game";}if(s=="--capture-setup"){captureModal=8;s="--capture";}if(s=="--capture-history"){captureModal=5;captureGame=true;s="--capture-game";}if(s=="--capture-review"){reviewMode=true;s="--capture-over";}if(s=="--capture-over"){capture=true;captureGame=true;captureOver=true;if(i+1<argc)capturePath=argv[++i];}if(s=="--capture"||s=="--capture-game"){capture=true;captureGame=s=="--capture-game";if(i+1<argc)capturePath=argv[++i];}if(s=="--smoke")smoke=true;if(s=="--data-dir"&&i+1<argc)base=std::string(argv[++i])+"/";}
 #ifdef __SWITCH__
- base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";
+ romfsInit();base="sdmc:/switch/GuandanSwitch/";mkdir(base.c_str(),0777);fontPath="romfs:/font.otf";padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
 #else
  fontPath="romfs/font.otf";
 #endif
- if(SDL_Init(SDL_INIT_VIDEO)<0){return 1;}
- window=SDL_CreateWindow("Guandan",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN);
- ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED);if(!ren){return 1;}
- SDL_RenderSetLogicalSize(ren,W,H);
- // 第一步：红色屏幕 - 证明SDL渲染器已启动
- SDL_SetRenderDrawColor(ren,180,30,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
- // 第二步：尝试挂载romfs和手柄
-#ifdef __SWITCH__
- {Result r=romfsInit();if(R_FAILED(r))fontPath="";}
- padConfigureInput(1,HidNpadStyleSet_NpadStandard);
- static PadState pad;
- padInitializeDefault(&pad);
-#endif
- // 第三步：绿色屏幕 - 证明romfs和手柄已初始化
- SDL_SetRenderDrawColor(ren,30,150,30,255);SDL_RenderClear(ren);SDL_RenderPresent(ren);
- if(TTF_Init()>=0&&!fontPath.empty())fonts[20]=TTF_OpenFont(fontPath.c_str(),20);
- if(fonts[20]){SDL_SetRenderDrawColor(ren,8,16,28,255);SDL_RenderClear(ren);text("加载中...",640,340,36,{200,220,255},true);SDL_RenderPresent(ren);}
+ if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_GAMECONTROLLER)<0){fprintf(stderr,"SDL: %s\n",SDL_GetError());return 1;}if(TTF_Init()<0){fprintf(stderr,"TTF: %s\n",TTF_GetError());return 1;}
+ window=SDL_CreateWindow("掼蛋时光 | Guandan Switch",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,W,H,SDL_WINDOW_SHOWN|SDL_WINDOW_RESIZABLE);
+ ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);if(!ren)ren=SDL_CreateRenderer(window,-1,SDL_RENDERER_SOFTWARE);if(!ren){fprintf(stderr,"Renderer: %s\n",SDL_GetError());return 1;}
+ SDL_RenderSetLogicalSize(ren,W,H);SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
+ fonts[20]=TTF_OpenFont(fontPath.c_str(),20);if(!fonts[20]){fprintf(stderr,"Font: %s\n",TTF_GetError());return 1;}
  loadAvatars();loadBg();
- // 音频：默认跳过避免模拟器挂起，存在 enable_audio 文件时才尝试初始化
- {bool tryAudio=false;std::ifstream af(base+"enable_audio");if(af.good())tryAudio=true;if(tryAudio){SDL_AudioSpec spec{};spec.freq=44100;spec.format=AUDIO_S16LSB;spec.channels=2;spec.samples=2048;SDL_AudioSpec obtained{};audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,&obtained,SDL_AUDIO_ALLOW_ANY_CHANGE);if(audioDevice){fprintf(stderr,"Audio: %dHz %dch\n",obtained.freq,obtained.channels);SDL_PauseAudioDevice(audioDevice,0);}else fprintf(stderr,"Audio unavailable: %s\n",SDL_GetError());}}
- std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;int savedMusicVol=50;if(profile>>savedMusicVol)musicVolume=std::clamp(savedMusicVol,0,100);int savedSfxVol=80;if(profile>>savedSfxVol)sfxVolume=std::clamp(savedSfxVol,0,100);skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}if(sound&&musicVolume>0)musicStart();
- if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
+ SDL_AudioSpec spec{};spec.freq=48000;spec.format=AUDIO_S16SYS;spec.channels=1;spec.samples=1024;audioDevice=SDL_OpenAudioDevice(nullptr,0,&spec,nullptr,0);if(audioDevice)SDL_PauseAudioDevice(audioDevice,0);
+ std::ifstream profile(base+"profile.txt");profile>>total>>wins>>bombs>>skin>>speed>>sound>>recorder;int savedDifficulty=1;if(profile>>savedDifficulty)game.difficulty=std::clamp(savedDifficulty,0,2);int savedTimer=1;if(profile>>savedTimer)timerOn=savedTimer!=0;skin=(skin%3+3)%3;speed=(speed%3+3)%3;{Game old;hasSave=old.load(base+"session.dat");}
+ if(captureGame||smoke){start(smoke?2:captureMode,20261016u);if(captureOver)autoplay=true;ensureGroups();if(layoutCapture==1)restoreHand();if(layoutCapture==2)doHint();if(layoutCapture==3)counterOpen=true;if(layoutCapture==4)organized=false;}if(captureModal){if(captureModal==5)for(int i=0;i<14&&!game.over;i++)game.autoStep();if(captureModal==8)focus=3;setModal(captureModal);}Uint32 frame=0; while(!quit){
 #ifdef __SWITCH__
  if(!appletMainLoop()){break;}padUpdate(&pad);u64 down=padGetButtonsDown(&pad);u64 held=padGetButtons(&pad);static Uint32 repeat=0;u64 dirs=HidNpadButton_Left|HidNpadButton_Right|HidNpadButton_Up|HidNpadButton_Down;if(down&HidNpadButton_StickLLeft)down|=HidNpadButton_Left;if(down&HidNpadButton_StickLRight)down|=HidNpadButton_Right;if(down&HidNpadButton_StickLUp)down|=HidNpadButton_Up;if(down&HidNpadButton_StickLDown)down|=HidNpadButton_Down;if(held&HidNpadButton_StickLLeft)held|=HidNpadButton_Left;if(held&HidNpadButton_StickLRight)held|=HidNpadButton_Right;if(held&HidNpadButton_StickLUp)held|=HidNpadButton_Up;if(held&HidNpadButton_StickLDown)held|=HidNpadButton_Down;if(down&dirs)repeat=SDL_GetTicks()+320;else if((held&dirs)&&SDL_GetTicks()>repeat){down|=held&dirs;repeat=SDL_GetTicks()+95;}
- struct Binding{u64 bit;Action a;};Binding bindings[]={{HidNpadButton_Left,LEFT},{HidNpadButton_Right,RIGHT},{HidNpadButton_Up,UP},{HidNpadButton_Down,DOWN},{HidNpadButton_A,CONFIRM},{HidNpadButton_B,BACK},{HidNpadButton_X,PLAY},{HidNpadButton_Y,HINT},{HidNpadButton_L,PASS},{HidNpadButton_R,SORT},{HidNpadButton_ZR,AUTO},{HidNpadButton_ZL,HISTORY},{HidNpadButton_Plus,PAUSE},{HidNpadButton_Minus,HELP}};for(auto b:bindings)if(down&b.bit)act(b.a);
+ struct Binding{u64 bit;Action a;};Binding bindings[]={{HidNpadButton_Left,LEFT},{HidNpadButton_Right,RIGHT},{HidNpadButton_Up,UP},{HidNpadButton_Down,DOWN},{HidNpadButton_A,CONFIRM},{HidNpadButton_B,BACK},{HidNpadButton_X,PLAY},{HidNpadButton_Y,HINT},{HidNpadButton_L,PASS},{HidNpadButton_R,SORT},{HidNpadButton_StickR,RESTORE},{HidNpadButton_StickL,SUIT},{HidNpadButton_ZR,AUTO},{HidNpadButton_ZL,HISTORY},{HidNpadButton_Plus,PAUSE},{HidNpadButton_Minus,HELP}};for(auto b:bindings)if(down&b.bit)act(b.a);
 #endif
- SDL_Event e;while(SDL_PollEvent(&e)){if(e.type==SDL_QUIT)quit=true;if(e.type==SDL_KEYDOWN){switch(e.key.keysym.sym){case SDLK_LEFT:act(LEFT);break;case SDLK_RIGHT:act(RIGHT);break;case SDLK_UP:act(UP);break;case SDLK_DOWN:act(DOWN);break;case SDLK_SPACE:act(CONFIRM);break;case SDLK_RETURN:act(screen&&!modal&&!game.over?PLAY:CONFIRM);break;case SDLK_ESCAPE:act(modal?BACK:PAUSE);break;case SDLK_BACKSPACE:act(BACK);break;case SDLK_h:act(HINT);break;case SDLK_p:act(PASS);break;case SDLK_r:act(SORT);break;case SDLK_t:act(AUTO);break;case SDLK_F1:act(HELP);break;case SDLK_l:act(HISTORY);break;case SDLK_e:act(EMOTE);break;}}
-  if(e.type==SDL_MOUSEBUTTONDOWN&&e.button.which!=SDL_TOUCH_MOUSEID){float mx,my;SDL_RenderWindowToLogical(ren,e.button.x,e.button.y,&mx,&my);click(int(mx),int(my));}if(e.type==SDL_FINGERDOWN)click(int(e.tfinger.x*W),int(e.tfinger.y*H));
-  // 长按滑动多选：手指滑动经过的牌自动选中
-  if(e.type==SDL_FINGERMOTION&&screen&&!modal&&game.turn==0&&!autoplay&&!game.over){
-   int sx=int(e.tfinger.x*W),sy=int(e.tfinger.y*H);int n=game.hands[0].size();bool hit=false;
-   if(organized){auto pos=organizedPositions();
-    for(int gi=(int)orgGroupStart.size()-2;gi>=0&&!hit;gi--){
-     for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1]&&!hit;ci++){
-      int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
-      if(sx>=pos[ci].x&&sx<pos[ci].x+pos[ci].w&&sy>=yy&&sy<yy+pos[ci].h){
-       selected[id]=!selected[id];sfx(0);cursor=ci;hit=true;}}}
-   }else{int step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
-    for(int i=n-1;i>=0&&!hit;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
-     if(sx>=xx+i*step&&sx<xx+i*step+66&&sy>=yy&&sy<yy+104){
-      int id=game.hands[0][i];selected[id]=!selected[id];sfx(0);cursor=i;hit=true;}}}
-  }
+ SDL_Event e;while(SDL_PollEvent(&e)){if(e.type==SDL_QUIT)quit=true;if(e.type==SDL_KEYDOWN){switch(e.key.keysym.sym){case SDLK_LEFT:act(LEFT);break;case SDLK_RIGHT:act(RIGHT);break;case SDLK_UP:act(UP);break;case SDLK_DOWN:act(DOWN);break;case SDLK_SPACE:act(CONFIRM);break;case SDLK_RETURN:act(screen&&!modal&&!game.over?PLAY:CONFIRM);break;case SDLK_ESCAPE:act(modal?BACK:PAUSE);break;case SDLK_BACKSPACE:act(BACK);break;case SDLK_h:act(HINT);break;case SDLK_p:act(PASS);break;case SDLK_r:act(SORT);break;case SDLK_c:act(RESTORE);break;case SDLK_f:act(SUIT);break;case SDLK_g:act(FLUSH_FIND);break;case SDLK_k:act(COUNTER);break;case SDLK_t:act(AUTO);break;case SDLK_F1:act(HELP);break;case SDLK_l:act(HISTORY);break;case SDLK_e:act(EMOTE);break;}}
+  if(e.type==SDL_MOUSEBUTTONDOWN&&e.button.which!=SDL_TOUCH_MOUSEID){float mx,my;SDL_RenderWindowToLogical(ren,e.button.x,e.button.y,&mx,&my);click(int(mx),int(my));}
+ if(e.type==SDL_MOUSEMOTION&&e.motion.which!=SDL_TOUCH_MOUSEID&&(e.motion.state&SDL_BUTTON_LMASK)){float mx,my;SDL_RenderWindowToLogical(ren,e.motion.x,e.motion.y,&mx,&my);moveHandGesture(int(mx),int(my));}
+ if(e.type==SDL_MOUSEBUTTONUP||e.type==SDL_FINGERUP)gestureActive=false;
+ if(e.type==SDL_FINGERDOWN||e.type==SDL_FINGERMOTION){int ww,hh;SDL_GetWindowSize(window,&ww,&hh);float mx,my;SDL_RenderWindowToLogical(ren,int(e.tfinger.x*ww),int(e.tfinger.y*hh),&mx,&my);if(e.type==SDL_FINGERDOWN)click(int(mx),int(my));else moveHandGesture(int(mx),int(my));}
  }
+
  Uint32 now=SDL_GetTicks();
  if(screen&&!modal){
   for(int p=0;p<4;p++){Move cur=game.shown[p];Move old=lastShown[p];
@@ -561,14 +451,14 @@ int main(int argc,char**argv){
    if(passed)addFx(FX_PASS,0,0,p==0?300:p==1?96:p==2?640:1184,(p==0?420:p==1?260:p==2?90:260),{});
   }
   lastShown=game.shown;lastPassed=game.passed;
-  if(game.over&&!lastOver){addFx(FX_WIN,0,0,0,0,{});sfx(game.champion?4:7);}
+  if(game.over&&!lastOver){addFx(FX_WIN,0,0,0,0,{});sfx(4);}
   lastOver=game.over;
  }
- if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(capture&&captureOver?0:speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;clearSelection();cursor=0;lastAI=now;if(m.explosive())sfx(3);else sfx(1);checkpoint();}
+ if(screen&&!modal&&!game.over&&(game.turn!=0||autoplay)&&now-lastAI>Uint32(capture&&captureOver?0:speed==0?1500:speed==1?850:320)&&(!capture||captureOver)){int p=game.turn;Move m=game.hint(p);if(m.kind==NONE)game.pass(p);else game.play(p,m.cards);if(p==0&&m.explosive())bombs++;if(p==0){clearSelection();cursor=0;}lastAI=now;if(m.explosive())sfx(3);else sfx(1);checkpoint();}
  if(timerOn&&screen&&!modal&&!game.over&&!autoplay&&game.turn==0&&!capture&&now-lastAI>TURN_MS){doAutoMove();sfx(5);message("时间到，已自动出牌");lastAI=now;checkpoint();}
  if(smoke){if(frame==1){act(HELP);act(BACK);act(HINT);act(PLAY);}if(frame==2){act(PAUSE);act(BACK);act(AUTO);}if(frame>20)quit=true;}
  if(reviewMode&&game.over&&!modal&&frame>10)modal=7;
- trimCache();musicUpdate();if(screen)table();else{home();homeButtons();}overlay();clearFx(now);
+ trimCache();if(screen)table();else{home();homeButtons();}overlay();clearFx(now);
  if(now<toastUntil){box(390,112,500,50,14,{10,22,16,238});text(toast,640,124,20,GOLD,true);}
  if((capture&&!captureOver&&frame==2)||(captureOver&&game.over&&frame>10&&!reviewMode)||(reviewMode&&game.over&&modal==7&&frame>18)){SDL_Surface*sf=SDL_CreateRGBSurfaceWithFormat(0,W,H,32,SDL_PIXELFORMAT_ARGB8888);SDL_RenderReadPixels(ren,nullptr,sf->format->format,sf->pixels,sf->pitch);SDL_SaveBMP(sf,capturePath.c_str());SDL_FreeSurface(sf);quit=true;}
  SDL_RenderPresent(ren);frame++;SDL_Delay(16);
