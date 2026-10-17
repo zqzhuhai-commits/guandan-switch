@@ -538,11 +538,11 @@ int main(int argc,char**argv){
      for(int ci=orgGroupStart[gi];ci<orgGroupStart[gi+1];ci++){
       int id=game.hands[0][ci];int yy=pos[ci].y-(selected[id]?18:0);
       if(sx>=pos[ci].x&&sx<pos[ci].x+pos[ci].w&&sy>=yy&&sy<yy+pos[ci].h){
-       if(!selected[id]){selected[id]=true;sfx(0);}cursor=ci;return;}}}}
+       if(!selected[id]){selected[id]=true;sfx(0);}cursor=ci;return;}}}
    else{int step=std::min(58,1138/std::max(1,n-1)),xx=(W-(step*std::max(0,n-1)+66))/2;
     for(int i=n-1;i>=0;i--){int yy=513-(selected[game.hands[0][i]]?18:0);
      if(sx>=xx+i*step&&sx<xx+i*step+66&&sy>=yy&&sy<yy+104){
-      int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;return;}}}}}
+      int id=game.hands[0][i];if(!selected[id]){selected[id]=true;sfx(0);}cursor=i;return;}}}}
  Uint32 now=SDL_GetTicks();
  if(screen&&!modal){
   for(int p=0;p<4;p++){Move cur=game.shown[p];Move old=lastShown[p];
